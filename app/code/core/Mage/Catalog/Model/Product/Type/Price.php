@@ -263,12 +263,12 @@ class Mage_Catalog_Model_Product_Type_Price
             foreach (explode(',', $optionIds->getValue()) as $optionId) {
                 if ($option = $product->getOptionById($optionId)) {
 
-                    $confItemOption = $product->getCustomOption('option_'.$option->getId());
+                    $quoteItemOption = $product->getCustomOption('option_'.$option->getId());
                     $group = $option->groupFactory($option->getType())
                         ->setOption($option)
-                        ->setConfigurationItemOption($confItemOption);
+                        ->setQuoteItemOption($quoteItemOption);
 
-                    $finalPrice += $group->getOptionPrice($confItemOption->getValue(), $basePrice);
+                    $finalPrice += $group->getOptionPrice($quoteItemOption->getValue(), $basePrice);
                 }
             }
         }

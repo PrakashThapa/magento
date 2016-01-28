@@ -162,13 +162,6 @@ class Mage_Adminhtml_Block_Widget_Grid extends Mage_Adminhtml_Block_Widget
     protected $_exportTypes = array();
 
     /**
-     * Rows per page for import
-     *
-     * @var int
-     */
-    protected $_exportPageSize = 1000;
-
-    /**
      * Massaction row id field
      *
      * @var string
@@ -450,23 +443,6 @@ class Mage_Adminhtml_Block_Widget_Grid extends Mage_Adminhtml_Block_Widget
     }
 
     /**
-     * Sets sorting order by some column
-     *
-     * @param Mage_Adminhtml_Block_Widget_Grid_Column $column
-     * @return Mage_Adminhtml_Block_Widget_Grid
-     */
-    protected function _setCollectionOrder($column)
-    {
-        $collection = $this->getCollection();
-        if ($collection) {
-            $columnIndex = $column->getFilterIndex() ?
-                $column->getFilterIndex() : $column->getIndex();
-            $collection->setOrder($columnIndex, $column->getDir());
-        }
-        return $this;
-    }
-
-    /**
      * Prepare grid collection object
      *
      * @return this
@@ -499,7 +475,9 @@ class Mage_Adminhtml_Block_Widget_Grid extends Mage_Adminhtml_Block_Widget
             if (isset($this->_columns[$columnId]) && $this->_columns[$columnId]->getIndex()) {
                 $dir = (strtolower($dir)=='desc') ? 'desc' : 'asc';
                 $this->_columns[$columnId]->setDir($dir);
-                $this->_setCollectionOrder($this->_columns[$columnId]);
+                $column = $this->_columns[$columnId]->getFilterIndex() ?
+                    $this->_columns[$columnId]->getFilterIndex() : $this->_columns[$columnId]->getIndex();
+                $this->getCollection()->setOrder($column , $dir);
             }
 
             if (!$this->_isExport) {
@@ -809,23 +787,6 @@ class Mage_Adminhtml_Block_Widget_Grid extends Mage_Adminhtml_Block_Widget
     }
 
      /**
-     * Returns url for RSS
-     * Can be overloaded in descendant classes to perform custom changes to url passed to addRssList()
-     *
-     * @param string $url
-     * @return string
-     */
-    protected function _getRssUrl($url)
-    {
-        $urlModel = Mage::getModel('core/url');
-        if (Mage::app()->getStore()->getStoreInUrl()) {
-            // Url in 'admin' store view won't be accessible, so form it in default store view frontend
-            $urlModel->setStore(Mage::app()->getDefaultStoreView());
-        }
-        return $urlModel->getUrl($url);
-    }
-
-     /**
      * Add new rss list to grid
      *
      * @param   string $url
@@ -836,7 +797,7 @@ class Mage_Adminhtml_Block_Widget_Grid extends Mage_Adminhtml_Block_Widget
     {
         $this->_rssLists[] = new Varien_Object(
             array(
-                'url'   => $this->_getRssUrl($url),
+                'url'   => Mage::getModel('core/url')->getUrl($url),
                 'label' => $label
             )
         );
@@ -918,7 +879,7 @@ class Mage_Adminhtml_Block_Widget_Grid extends Mage_Adminhtml_Block_Widget
 
         while ($break !== true) {
             $collection = clone $originalCollection;
-            $collection->setPageSize($this->_exportPageSize);
+            $collection->setPageSize(1000);
             $collection->setCurPage($page);
             $collection->load();
             if (is_null($count)) {
@@ -1610,17 +1571,4 @@ class Mage_Adminhtml_Block_Widget_Grid extends Mage_Adminhtml_Block_Widget
         $this->_emptyCellLabel = $label;
         return $this;
     }
-
-    /**
-     * Return row url for js event handlers
-     *
-     * @param Mage_Catalog_Model_Product|Varien_Object
-     * @return string
-     */
-    public function getRowUrl($item)
-    {
-        $res = parent::getRowUrl($item);
-        return ($res ? $res : '#');
-    }
-
 }

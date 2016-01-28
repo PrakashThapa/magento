@@ -173,8 +173,8 @@ class Mage_Tax_Block_Sales_Order_Tax extends Mage_Core_Block_Template
 
             $total = $parent->getTotal('subtotal');
             if ($total) {
-                $total->setValue(max(0, $subtotalIncl));
-                $total->setBaseValue(max(0, $baseSubtotalIncl));
+                $total->setValue($subtotalIncl);
+                $total->setBaseValue($baseSubtotalIncl);
             }
         }
         return $this;

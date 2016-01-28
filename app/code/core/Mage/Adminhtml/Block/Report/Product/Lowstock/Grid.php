@@ -98,7 +98,7 @@ class Mage_Adminhtml_Block_Report_Product_Lowstock_Grid extends Mage_Adminhtml_B
         ));
 
         $this->addExportType('*/*/exportLowstockCsv', Mage::helper('reports')->__('CSV'));
-        $this->addExportType('*/*/exportLowstockExcel', Mage::helper('reports')->__('Excel XML'));
+        $this->addExportType('*/*/exportLowstockExcel', Mage::helper('reports')->__('Excel'));
 
         return parent::_prepareColumns();
     }

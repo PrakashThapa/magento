@@ -82,9 +82,6 @@ varienForm.prototype = {
     },
 
     _processValidationResult : function(transport){
-        if (typeof varienGlobalEvents != undefined) {
-            varienGlobalEvents.fireEvent('formValidateAjaxComplete', transport);
-        }
         var response = transport.responseText.evalJSON();
         if(response.error){
             if($('messages')){
@@ -409,12 +406,8 @@ FormElementDependenceController.prototype = {
         }
         for (var idTo in elementsMap) {
             for (var idFrom in elementsMap[idTo]) {
-                if ($(idFrom)) {
-                    Event.observe($(idFrom), 'change', this.trackChange.bindAsEventListener(this, idTo, elementsMap[idTo]));
-                    this.trackChange(null, idTo, elementsMap[idTo]);
-                } else {
-                    this.trackChange(null, idTo, elementsMap[idTo]);
-                }
+                Event.observe($(idFrom), 'change', this.trackChange.bindAsEventListener(this, idTo, elementsMap[idTo]));
+                this.trackChange(null, idTo, elementsMap[idTo]);
             }
         }
     },
@@ -440,25 +433,22 @@ FormElementDependenceController.prototype = {
         // define whether the target should show up
         var shouldShowUp = true;
         for (var idFrom in valuesFrom) {
-            var from = $(idFrom);
-            if (!from || from.value != valuesFrom[idFrom]) {
+            if ($(idFrom).value != valuesFrom[idFrom]) {
                 shouldShowUp = false;
             }
         }
 
         // toggle target row
         if (shouldShowUp) {
-            $(idTo).up(this._config.levels_up).select('input', 'select', 'td').each(function (item) {
-                // don't touch hidden inputs (and Use Default inputs too), bc they may have custom logic
-                if ((!item.type || item.type != 'hidden') && !($(item.id+'_inherit') && $(item.id+'_inherit').checked)) {
+            $(idTo).up(this._config.levels_up).select('input', 'select').each(function (item) {
+                if (!item.type || item.type != 'hidden') { // don't touch hidden inputs, bc they may have custom logic
                     item.disabled = false;
                 }
             });
             $(idTo).up(this._config.levels_up).show();
         } else {
-            $(idTo).up(this._config.levels_up).select('input', 'select', 'td').each(function (item){
-                // don't touch hidden inputs (and Use Default inputs too), bc they may have custom logic
-                if ((!item.type || item.type != 'hidden') && !($(item.id+'_inherit') && $(item.id+'_inherit').checked)) {
+            $(idTo).up(this._config.levels_up).select('input', 'select').each(function (item){
+                if (!item.type || item.type != 'hidden') { // don't touch hidden inputs, bc they may have custom logic
                     item.disabled = true;
                 }
             });

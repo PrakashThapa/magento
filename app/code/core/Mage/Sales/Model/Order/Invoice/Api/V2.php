@@ -42,7 +42,7 @@ class Mage_Sales_Model_Order_Invoice_Api_V2 extends Mage_Sales_Model_Order_Invoi
     public function items($filters = null)
     {
         //TODO: add full name logic
-        $collection =  Mage::getModel('sales/order_invoice')->getCollection()
+        $collection = Mage::getResourceModel('sales/order_invoice_collection')
             ->addAttributeToSelect('order_id')
             ->addAttributeToSelect('increment_id')
             ->addAttributeToSelect('created_at')
@@ -57,36 +57,26 @@ class Mage_Sales_Model_Order_Invoice_Api_V2 extends Mage_Sales_Model_Order_Invoi
         $preparedFilters = array();
         if (isset($filters->filter)) {
             foreach ($filters->filter as $_filter) {
-                $preparedFilters[][$_filter->key] = $_filter->value;
+                $preparedFilters[$_filter->key] = $_filter->value;
             }
         }
         if (isset($filters->complex_filter)) {
             foreach ($filters->complex_filter as $_filter) {
                 $_value = $_filter->value;
-                if(is_object($_value)) {
-                    $preparedFilters[][$_filter->key] = array(
-                        $_value->key => $_value->value
-                    );
-                } elseif(is_array($_value)) {
-                    $preparedFilters[][$_filter->key] = array(
-                        $_value['key'] => $_value['value']
-                    );
-                } else {
-                    $preparedFilters[][$_filter->key] = $_value;
-                }
+                $preparedFilters[$_filter->key] = array(
+                    $_value->key => $_value->value
+                );
             }
         }
 
         if (!empty($preparedFilters)) {
             try {
-                foreach ($preparedFilters as $preparedFilter) {
-                    foreach ($preparedFilter as $field => $value) {
-                        if (isset($this->_attributesMap['order'][$field])) {
-                            $field = $this->_attributesMap['order'][$field];
-                        }
-
-                        $collection->addFieldToFilter($field, $value);
+                foreach ($preparedFilters as $field => $value) {
+                    if (isset($this->_attributesMap['invoice'][$field])) {
+                        $field = $this->_attributesMap['invoice'][$field];
                     }
+
+                    $collection->addFieldToFilter($field, $value);
                 }
             } catch (Mage_Core_Exception $e) {
                 $this->_fault('filters_invalid', $e->getMessage());

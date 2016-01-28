@@ -37,23 +37,6 @@ class Mage_Bundle_Model_Product_Price extends Mage_Catalog_Model_Product_Type_Pr
     const PRICE_TYPE_DYNAMIC    = 0;
 
     /**
-     * Flag wich indicates - is min/max prices have been calculated by index
-     *  
-     * @var bool
-     */
-    protected $_isPricesCalculatedByIndex;
-
-    /**
-     * Is min/max prices have been calculated by index
-     * 
-     * @return bool
-     */
-    public function getIsPricesCalculatedByIndex()
-    {
-        return $this->_isPricesCalculatedByIndex;
-    }    
-    
-    /**
      * Return product base price
      *
      * @return string
@@ -102,11 +85,6 @@ class Mage_Bundle_Model_Product_Price extends Mage_Catalog_Model_Product_Type_Pr
             $customOption = $product->getCustomOption('bundle_selection_ids');
             $selectionIds = unserialize($customOption->getValue());
             $selections = $product->getTypeInstance(true)->getSelectionsByIds($selectionIds, $product);
-            $selections->addTierPriceData();
-            Mage::dispatchEvent('prepare_catalog_product_collection_prices', array(
-                'collection'    => $selections,
-                'store_id'      => $product->getStoreId(),
-            ));
             foreach ($selections->getItems() as $selection) {
                 if ($selection->isSalable()) {
                     $selectionQty = $product->getCustomOption('selection_qty_' . $selection->getSelectionId());
@@ -152,31 +130,17 @@ class Mage_Bundle_Model_Product_Price extends Mage_Catalog_Model_Product_Type_Pr
      */
     public function getPrices($product, $which = null)
     {
-        return $this->getPricesDependingOnTax($product, $which);
-    }
-
-    /**
-     * Retrieve Prices depending on tax
-     *
-     * @param unknown_type $product
-     * @param unknown_type $which
-     * @return unknown
-     */
-    public function getPricesDependingOnTax($product, $which = null, $includeTax = null)
-    {
         // check calculated price index
-        if ($product->getData('min_price') &&
-            $product->getData('max_price')) {               
-                $minimalPrice = Mage::helper('tax')->getPrice($product, $product->getData('min_price'), $includeTax);
-                $maximalPrice = Mage::helper('tax')->getPrice($product, $product->getData('max_price'), $includeTax);
-                $this->_isPricesCalculatedByIndex = true;
+        if ($product->getData('min_price') && $product->getData('max_price')) {
+            $minimalPrice = $product->getData('min_price');
+            $maximalPrice = $product->getData('max_price');
         } else {
             /**
              * Check if product price is fixed
              */
             $finalPrice = $product->getFinalPrice();
             if ($product->getPriceType() == self::PRICE_TYPE_FIXED) {
-                $minimalPrice = $maximalPrice = Mage::helper('tax')->getPrice($product, $finalPrice, $includeTax);
+                $minimalPrice = $maximalPrice = $finalPrice;
             } else { // PRICE_TYPE_DYNAMIC
                 $minimalPrice = $maximalPrice = 0;
             }
@@ -202,12 +166,12 @@ class Mage_Bundle_Model_Product_Price extends Mage_Catalog_Model_Product_Type_Pr
                             }
 
                             $qty = $selection->getSelectionQty();
-                            if ($selection->getSelectionCanChangeQty() && !$option->isMultiSelection()) {
+                            if ($selection->getSelectionCanChangeQty() && $option->isMultiSelection()) {
                                 $qty = min(1, $qty);
                             }
 
-                            $selectionMinimalPrices[] = Mage::helper('tax')->getPrice($selection, $this->getSelectionFinalPrice($product, $selection, 1, $qty), $includeTax);
-                            $selectionMaximalPrices[] = Mage::helper('tax')->getPrice($selection, $this->getSelectionFinalPrice($product, $selection, 1), $includeTax);
+                            $selectionMinimalPrices[] = $this->getSelectionFinalPrice($product, $selection, 1, $qty);
+                            $selectionMaximalPrices[] = $this->getSelectionFinalPrice($product, $selection, 1);
                         }
 
                         if (count($selectionMinimalPrices)) {
@@ -216,7 +180,6 @@ class Mage_Bundle_Model_Product_Price extends Mage_Catalog_Model_Product_Type_Pr
                                 $minimalPrice += $selMinPrice;
                                 $minPriceFounded = true;
                             } elseif (true !== $minPriceFounded) {
-                                $selMinPrice += $minimalPrice;
                                 $minPriceFounded = false === $minPriceFounded ? $selMinPrice : min($minPriceFounded, $selMinPrice);
                             }
 
@@ -234,7 +197,13 @@ class Mage_Bundle_Model_Product_Price extends Mage_Catalog_Model_Product_Type_Pr
                 $minimalPrice = $minPriceFounded;
             }
 
+            if ($product->getPriceType() == self::PRICE_TYPE_DYNAMIC) {
+                $minimalPrice = $this->_applySpecialPrice($product, $minimalPrice);
+                $maximalPrice = $this->_applySpecialPrice($product, $maximalPrice);
+            }
+
             $customOptions = $product->getOptions();
+
             if ($product->getPriceType() == self::PRICE_TYPE_FIXED && $customOptions) {
                 foreach ($customOptions as $customOption) {
                     /* @var $customOption Mage_Catalog_Model_Product_Option */
@@ -249,33 +218,20 @@ class Mage_Bundle_Model_Product_Price extends Mage_Catalog_Model_Product_Type_Pr
                         }
                         if (count($prices)) {
                             if ($customOption->getIsRequire()) {
-                                $minimalPrice += Mage::helper('tax')->getPrice($product, min($prices), $includeTax);
+                                $minimalPrice += min($prices);
                             }
-
-                            $multiTypes = array(
-                                //Mage_Catalog_Model_Product_Option::OPTION_TYPE_DROP_DOWN,
-                                Mage_Catalog_Model_Product_Option::OPTION_TYPE_CHECKBOX,
-                                Mage_Catalog_Model_Product_Option::OPTION_TYPE_MULTIPLE
-                            );
-                            
-                            if (in_array($customOption->getType(), $multiTypes)) {
-                                $maximalValue = array_sum($prices);
-                            } else {                                
-                                $maximalValue = max($prices);
-                            }
-                            $maximalPrice += Mage::helper('tax')->getPrice($product, $maximalValue, $includeTax);
+                            $maximalPrice += max($prices);
                         }
                     } else {
                         $valuePrice = $customOption->getPrice(true);
 
                         if ($customOption->getIsRequire()) {
-                            $minimalPrice += Mage::helper('tax')->getPrice($product, $valuePrice, $includeTax);
+                            $minimalPrice += $valuePrice;
                         }
-                        $maximalPrice += Mage::helper('tax')->getPrice($product, $valuePrice, $includeTax);
+                        $maximalPrice += $valuePrice;
                     }
                 }
             }
-            $this->_isPricesCalculatedByIndex = false;
         }
 
         if ($which == 'max') {
@@ -306,7 +262,7 @@ class Mage_Bundle_Model_Product_Price extends Mage_Catalog_Model_Product_Type_Pr
      */
     public function getMaximalPrice($product)
     {
-        return $this->getPrices($product, 'max');
+        return $this->getPrice($product, 'max');
     }
 
     /**

@@ -33,16 +33,10 @@
  */
 class Mage_Adminhtml_Block_Sales_Order_Create_Sidebar_Wishlist extends Mage_Adminhtml_Block_Sales_Order_Create_Sidebar_Abstract
 {
-    /**
-     * Storage action on selected item
-     *
-     * @var string
-     */
-    protected $_sidebarStorageAction = 'add_wishlist_item';
 
-    protected function _construct()
+    public function __construct()
     {
-        parent::_construct();
+        parent::__construct();
         $this->setId('sales_order_create_sidebar_wishlist');
         $this->setDataId('wishlist');
     }
@@ -61,61 +55,22 @@ class Mage_Adminhtml_Block_Sales_Order_Create_Sidebar_Wishlist extends Mage_Admi
     {
         $collection = $this->getData('item_collection');
         if (is_null($collection)) {
-            $collection = $this->getCreateOrderModel()->getCustomerWishlist(true);
-            if ($collection) {
-                $collection = $collection->getItemCollection()->load();
+            if ($collection = $this->getCreateOrderModel()->getCustomerWishlist()) {
+                $collection = $collection->getProductCollection()
+                    ->addAttributeToSelect('name')
+                    ->addAttributeToSelect('price')
+                    ->addAttributeToSelect('small_image')
+                    ->load();
             }
             $this->setData('item_collection', $collection);
         }
         return $collection;
     }
 
-    /**
-     * Retrieve all items
-     *
-     * @return array
-     */
-    public function getItems()
+    public function getItemId($item)
     {
-        $items = parent::getItems();
-        foreach ($items as $item) {
-            $product = $item->getProduct();
-            $item->setName($product->getName());
-            $item->setPrice($product->getPrice());
-            $item->setTypeId($product->getTypeId());
-        }
-        return $items;
+        return $item->getWishlistItemId();
     }
 
-    /**
-     * Retrieve product identifier linked with item
-     *
-     * @param   Mage_Wishlist_Model_Item $item
-     * @return  int
-     */
-    public function getProductId($item)
-    {
-        return $item->getProduct()->getId();
-    }
-
-    /**
-     * Retrieve identifier of block item
-     *
-     * @param   Varien_Object $item
-     * @return  int
-     */
-    public function getIdentifierId($item)
-    {
-        return $item->getId();
-    }
-
-    /**
-     * Retrieve possibility to display quantity column in grid of wishlist block
-     *
-     * @return bool
-     */
-    public function canDisplayItemQty()
-    {
-        return true;
-    }
 }
+

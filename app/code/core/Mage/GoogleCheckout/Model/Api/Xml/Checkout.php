@@ -101,10 +101,6 @@ EOT;
         $billingDiscount = (float)$this->getQuote()->getBillingAddress()->getBaseDiscountAmount();
         $discount = $billingDiscount + $shippingDiscount;
 
-        // exclude shipping discount
-        // discount is negative value
-        $discount += $this->getQuote()->getShippingAddress()->getBaseShippingDiscountAmount();
-
         $discountItem = new Varien_Object(array(
                 'price' => $discount,
                 'name'  => $this->__('Cart Discount'),
@@ -118,8 +114,8 @@ EOT;
             $xml .= <<<EOT
             <item>
                 <merchant-item-id>_INTERNAL_DISCOUNT_</merchant-item-id>
-                <item-name>{$discountItem->getName()}</item-name>
-                <item-description>{$discountItem->getDescription()}</item-description>
+                <item-name>{$this->__('Cart Discount')}</item-name>
+                <item-description>{$this->__('Virtual item to reflect discount total')}</item-description>
                 <unit-price currency="{$this->getCurrency()}">{$discount}</unit-price>
                 <quantity>1</quantity>
                 <item-weight unit="{$weightUnit}" value="0.00" />
@@ -355,10 +351,6 @@ EOT;
             return '';
         }
 
-        //if isset Tax Class for Shipping - create abbility to manage shipping rates in MerchantCalculationCallback
-        $nodeName = $this->_getTaxClassForShipping($this->getQuote()) ?
-            'merchant-calculated-shipping' : 'flat-rate-shipping';
-
         for ($xml='', $i=1; $i<=3; $i++) {
             $allowSpecific = Mage::getStoreConfigFlag('google/checkout_shipping_flatrate/sallowspecific_'.$i, $this->getQuote()->getStoreId());
             $specificCountries = Mage::getStoreConfig('google/checkout_shipping_flatrate/specificcountry_'.$i, $this->getQuote()->getStoreId());
@@ -374,14 +366,14 @@ EOT;
             }
 
             $xml .= <<<EOT
-                <{$nodeName} name="{$title}">
+                <flat-rate-shipping name="{$title}">
                     <shipping-restrictions>
                         <allowed-areas>
                         {$allowedAreasXml}
                         </allowed-areas>
                     </shipping-restrictions>
                     <price currency="{$this->getCurrency()}">{$price}</price>
-                </{$nodeName}>
+                </flat-rate-shipping>
 EOT;
         }
         $this->_shippingCalculated = true;

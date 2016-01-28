@@ -213,7 +213,7 @@ class Mage_Catalog_Model_Convert_Parser_Product
      * ReDefine Product Type Instance to Product
      *
      * @param Mage_Catalog_Model_Product $product
-     * @return Mage_Catalog_Model_Convert_Parser_Product
+     * @return Mage_Catalog_Model_Convert_Adapter_Product
      */
     public function setProductTypeInstance(Mage_Catalog_Model_Product $product)
     {
@@ -389,6 +389,7 @@ class Mage_Catalog_Model_Convert_Parser_Product
 
         foreach ($entityIds as $i => $entityId) {
             $product = $this->getProductModel()
+                ->reset()
                 ->setStoreId($this->getStoreId())
                 ->load($entityId);
             $this->setProductTypeInstance($product);
@@ -472,7 +473,6 @@ class Mage_Catalog_Model_Convert_Parser_Product
                 ->setBatchData($row)
                 ->setStatus(1)
                 ->save();
-            $product->reset();
         }
 
         return $this;

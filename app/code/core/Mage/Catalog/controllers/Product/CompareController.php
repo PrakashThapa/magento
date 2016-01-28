@@ -116,10 +116,7 @@ class Mage_Catalog_Product_CompareController extends Mage_Core_Controller_Front_
                 }
             }
         }
-
-        if (!$this->getRequest()->getParam('isAjax', false)) {
-            $this->_redirectReferer();
-        }
+        $this->_redirectReferer();
     }
 
     public function clearAction()

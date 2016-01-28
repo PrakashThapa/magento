@@ -238,12 +238,12 @@ class Mage_Core_Model_App
     /**
      * Initialize application without request processing
      *
-     * @param  string|array $code
-     * @param  string $type
-     * @param  string|array $options
+     * @param string|array $code
+     * @param string $type
+     * @param string $etcDir
      * @return Mage_Core_Model_App
      */
-    public function init($code, $type = null, $options = array())
+    public function init($code, $type=null, $options=array())
     {
         $this->_initEnvironment();
         if (is_string($options)) {
@@ -252,7 +252,6 @@ class Mage_Core_Model_App
 
         Varien_Profiler::start('mage::app::init::config');
         $this->_config = Mage::getConfig();
-        $this->_config->setOptions($options);
         $this->_initBaseConfig();
         $this->_initCache();
         $this->_config->init($options);
@@ -266,13 +265,22 @@ class Mage_Core_Model_App
     }
 
     /**
-     * Common logic for all run types
+     * Run application. Run process responsible for request processing and sending response.
+     * List of suppported parametes:
+     *  scope_code - code of default scope (website/store_group/store code)
+     *  scope_type - type of default scope (website/group/store)
+     *  options    - configuration options
      *
-     * @param  string|array $options
+     * @param array $params application run parameters
+     *
      * @return Mage_Core_Model_App
      */
-    public function baseInit($options)
+    public function run($params)
     {
+        $scopeCode = isset($params['scope_code']) ? $params['scope_code'] : '';
+        $scopeType = isset($params['scope_type']) ? $params['scope_type'] : 'store';
+        $options   = isset($params['options']) ? $params['options'] : array();
+
         $this->_initEnvironment();
 
         $this->_config = Mage::getConfig();
@@ -281,48 +289,6 @@ class Mage_Core_Model_App
         $this->_initBaseConfig();
         $this->_initCache();
 
-        return $this;
-    }
-
-    /**
-     * Run light version of application with specified modules support
-     *
-     * @see Mage_Core_Model_App->run()
-     *
-     * @param  string|array $scopeCode
-     * @param  string $scopeType
-     * @param  string|array $options
-     * @param  string|array $modules
-     * @return Mage_Core_Model_App
-     */
-    public function initSpecified($scopeCode, $scopeType = null, $options = array(), $modules = array())
-    {
-        $this->baseInit($options);
-
-        if (!empty($modules)) {
-            $this->_config->addAllowedModules($modules);
-        }
-        $this->_initModules();
-        $this->_initCurrentStore($scopeCode, $scopeType);
-
-        return $this;
-    }
-
-    /**
-     * Run application. Run process responsible for request processing and sending response.
-     * List of supported parameters:
-     *  scope_code - code of default scope (website/store_group/store code)
-     *  scope_type - type of default scope (website/group/store)
-     *  options    - configuration options
-     *
-     * @param  array $params application run parameters
-     * @return Mage_Core_Model_App
-     */
-    public function run($params)
-    {
-        $options = isset($params['options']) ? $params['options'] : array();
-        $this->baseInit($options);
-
         if ($this->_cache->processRequest()) {
             $this->getResponse()->sendResponse();
         } else {
@@ -330,8 +296,6 @@ class Mage_Core_Model_App
             $this->loadAreaPart(Mage_Core_Model_App_Area::AREA_GLOBAL, Mage_Core_Model_App_Area::PART_EVENTS);
 
             if ($this->_config->isLocalConfigLoaded()) {
-                $scopeCode = isset($params['scope_code']) ? $params['scope_code'] : '';
-                $scopeType = isset($params['scope_type']) ? $params['scope_type'] : 'store';
                 $this->_initCurrentStore($scopeCode, $scopeType);
                 $this->_initRequest();
                 Mage_Core_Model_Resource_Setup::applyAllDataUpdates();
@@ -451,7 +415,6 @@ class Mage_Core_Model_App
             $this->_checkCookieStore($scopeType);
             $this->_checkGetStore($scopeType);
         }
-        $this->_useSessionInUrl = $this->getStore()->getConfig(Mage_Core_Model_Session_Abstract::XML_PATH_USE_FRONTEND_SID);
         return $this;
     }
 
@@ -511,9 +474,9 @@ class Mage_Core_Model_App
         if ($this->_currentStore == $store) {
             $store = $this->getStore($store);
             if ($store->getWebsite()->getDefaultStore()->getId() == $store->getId()) {
-                $this->getCookie()->delete(Mage_Core_Model_Store::COOKIE_NAME);
+                $this->getCookie()->delete('store');
             } else {
-                $this->getCookie()->set(Mage_Core_Model_Store::COOKIE_NAME, $this->_currentStore, true);
+                $this->getCookie()->set('store', $this->_currentStore, true);
             }
         }
         return $this;
@@ -531,7 +494,7 @@ class Mage_Core_Model_App
             return $this;
         }
 
-        $store = $this->getCookie()->get(Mage_Core_Model_Store::COOKIE_NAME);
+        $store  = $this->getCookie()->get('store');
         if ($store && isset($this->_stores[$store])
             && $this->_stores[$store]->getId()
             && $this->_stores[$store]->getIsActive()) {

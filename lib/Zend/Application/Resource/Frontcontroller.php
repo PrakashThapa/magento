@@ -15,16 +15,10 @@
  * @category   Zend
  * @package    Zend_Application
  * @subpackage Resource
- * @copyright  Copyright (c) 2005-2010 Zend Technologies USA Inc. (http://www.zend.com)
+ * @copyright  Copyright (c) 2005-2009 Zend Technologies USA Inc. (http://www.zend.com)
  * @license    http://framework.zend.com/license/new-bsd     New BSD License
- * @version    $Id: Frontcontroller.php 23378 2010-11-18 21:48:27Z bittarman $
+ * @version    $Id: Frontcontroller.php 18951 2009-11-12 16:26:19Z alexander $
  */
-
-/**
- * @see Zend_Application_Resource_ResourceAbstract
- */
-#require_once 'Zend/Application/Resource/ResourceAbstract.php';
-
 
 /**
  * Front Controller resource
@@ -32,7 +26,7 @@
  * @category   Zend
  * @package    Zend_Application
  * @subpackage Resource
- * @copyright  Copyright (c) 2005-2010 Zend Technologies USA Inc. (http://www.zend.com)
+ * @copyright  Copyright (c) 2005-2009 Zend Technologies USA Inc. (http://www.zend.com)
  * @license    http://framework.zend.com/license/new-bsd     New BSD License
  */
 class Zend_Application_Resource_Frontcontroller extends Zend_Application_Resource_ResourceAbstract
@@ -68,13 +62,7 @@ class Zend_Application_Resource_Frontcontroller extends Zend_Application_Resourc
                     break;
 
                 case 'moduledirectory':
-                    if (is_string($value)) {
-                        $front->addModuleDirectory($value);
-                    } elseif (is_array($value)) {
-                        foreach($value as $moduleDir) {
-                            $front->addModuleDirectory($moduleDir);
-                        }
-                    }
+                    $front->addModuleDirectory($value);
                     break;
 
                 case 'defaultcontrollername':
@@ -101,26 +89,9 @@ class Zend_Application_Resource_Frontcontroller extends Zend_Application_Resourc
 
                 case 'plugins':
                     foreach ((array) $value as $pluginClass) {
-                    	$stackIndex = null;
-                    	if(is_array($pluginClass)) {
-                    	    $pluginClass = array_change_key_case($pluginClass, CASE_LOWER);
-                            if(isset($pluginClass['class']))
-                            {
-                                if(isset($pluginClass['stackindex'])) {
-                                    $stackIndex = $pluginClass['stackindex'];
-                                }
-
-                                $pluginClass = $pluginClass['class'];
-                            }
-                        }
-
                         $plugin = new $pluginClass();
-                        $front->registerPlugin($plugin, $stackIndex);
+                        $front->registerPlugin($plugin);
                     }
-                    break;
-
-                case 'returnresponse':
-                    $front->returnResponse((bool) $value);
                     break;
 
                 case 'throwexceptions':

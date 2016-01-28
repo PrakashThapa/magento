@@ -46,21 +46,12 @@ class Mage_Adminhtml_Block_Customer_Edit_Tab_Account extends Mage_Adminhtml_Bloc
 
         $customer = Mage::registry('current_customer');
 
-        /* @var $customerForm Mage_Customer_Model_Form */
-        $customerForm = Mage::getModel('customer/form');
-        $customerForm->setEntity($customer)
-            ->setFormCode('adminhtml_customer')
-            ->initDefaultValues();
-
         $fieldset = $form->addFieldset('base_fieldset',
             array('legend'=>Mage::helper('customer')->__('Account Information'))
         );
 
-        $attributes = $customerForm->getAttributes();
-        foreach ($attributes as $attribute) {
-            $attribute->unsIsVisible();
-        }
-        $this->_setFieldset($attributes, $fieldset);
+
+        $this->_setFieldset($customer->getAttributes(), $fieldset);
 
         if ($customer->getId()) {
             $form->getElement('website_id')->setDisabled('disabled');
@@ -68,6 +59,8 @@ class Mage_Adminhtml_Block_Customer_Edit_Tab_Account extends Mage_Adminhtml_Bloc
         } else {
             $fieldset->removeField('created_in');
         }
+
+        $form->getElement('email')->addClass('validate-email');
 
 //        if (Mage::app()->isSingleStoreMode()) {
 //            $fieldset->removeField('website_id');
@@ -114,11 +107,11 @@ class Mage_Adminhtml_Block_Customer_Edit_Tab_Account extends Mage_Adminhtml_Bloc
                             'name'  => 'sendemail',
                             'label' => Mage::helper('customer')->__('Send Welcome Email after Confirmation')
                         ));
-                        $customer->setData('sendemail', '1');
                     }
                 }
             }
-        } else {
+        }
+        else {
             $newFieldset = $form->addFieldset(
                 'password_fieldset',
                 array('legend'=>Mage::helper('customer')->__('Password Management'))
@@ -139,7 +132,6 @@ class Mage_Adminhtml_Block_Customer_Edit_Tab_Account extends Mage_Adminhtml_Bloc
                 'name'  => 'sendemail',
                 'id'    => 'sendemail',
             ));
-            $customer->setData('sendemail', '1');
             if (!Mage::app()->isSingleStoreMode()) {
                 $fieldset->addField('sendemail_store_id', 'select', array(
                     'label' => $this->helper('customer')->__('Send From'),
@@ -150,19 +142,15 @@ class Mage_Adminhtml_Block_Customer_Edit_Tab_Account extends Mage_Adminhtml_Bloc
         }
 
         // make sendemail and sendmail_store_id disabled, if website_id has empty value
-        $isSingleMode = Mage::app()->isSingleStoreMode();
-        $sendEmailId = $isSingleMode ? 'sendemail' : 'sendemail_store_id';
-        $sendEmail = $form->getElement($sendEmailId);
-
-        $prefix = $form->getHtmlIdPrefix();
-        if ($sendEmail) {
-            $sendEmail->setAfterElementHtml(
+        if ($sendemail = $form->getElement('sendemail_store_id')) {
+            $prefix = $form->getHtmlIdPrefix();
+            $sendemail->setAfterElementHtml(
                 '<script type="text/javascript">'
                 . "
                 $('{$prefix}website_id').disableSendemail = function() {
-                    $('{$prefix}sendemail').disabled = ('' == this.value || '0' == this.value);".
-                    ($isSingleMode ? "" : "$('{$prefix}sendemail_store_id').disabled = ('' == this.value || '0' == this.value);")
-                ."}.bind($('{$prefix}website_id'));
+                    $('{$prefix}sendemail').disabled = ('' == this.value || '0' == this.value);
+                    $('{$prefix}sendemail_store_id').disabled = ('' == this.value || '0' == this.value);
+                }.bind($('{$prefix}website_id'));
                 Event.observe('{$prefix}website_id', 'change', $('{$prefix}website_id').disableSendemail);
                 $('{$prefix}website_id').disableSendemail();
                 "
@@ -182,19 +170,5 @@ class Mage_Adminhtml_Block_Customer_Edit_Tab_Account extends Mage_Adminhtml_Bloc
         $form->setValues($customer->getData());
         $this->setForm($form);
         return $this;
-    }
-
-    /**
-     * Return predefined additional element types
-     *
-     * @return array
-     */
-    protected function _getAdditionalElementTypes()
-    {
-        return array(
-            'file'      => Mage::getConfig()->getBlockClassName('adminhtml/customer_form_element_file'),
-            'image'     => Mage::getConfig()->getBlockClassName('adminhtml/customer_form_element_image'),
-            'boolean'   => Mage::getConfig()->getBlockClassName('adminhtml/customer_form_element_boolean'),
-        );
     }
 }

@@ -88,6 +88,8 @@
 "Invalid FedEx XML code type: %s","Invalid FedEx XML code type: %s"
 "Invalid UPS CGI code for type %s: %s","Invalid UPS CGI code for type %s: %s"
 "Invalid UPS CGI code type: %s","Invalid UPS CGI code type: %s"
+"Invalid USPS XML code for type %s: %s","Invalid USPS XML code for type %s: %s"
+"Invalid USPS XML code type: %s","Invalid USPS XML code type: %s"
 "Kilograms","Kilograms"
 "Large","Large"
 "Letter","Letter"

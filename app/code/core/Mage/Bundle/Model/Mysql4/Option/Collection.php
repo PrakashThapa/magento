@@ -33,13 +33,6 @@
  */
 class Mage_Bundle_Model_Mysql4_Option_Collection extends Mage_Core_Model_Mysql4_Collection_Abstract
 {
-    /**
-     * All item ids cache
-     *
-     * @var array
-     */
-    protected $_itemIds;
-
     protected $_selectionsAppended = false;
     protected function _construct()
     {
@@ -79,7 +72,7 @@ class Mage_Bundle_Model_Mysql4_Option_Collection extends Mage_Core_Model_Mysql4_
     /**
      * Append selection to options
      * stripBefore - indicates to reload
-     * appendAll - indicates do we need to filter by saleable and required custom options
+     * appendAll - indecates do we need to filter by saleable and required custom options
      *
      * @param Mage_Bundle_Model_Mysql4_Selection_Collection $selectionsCollection
      * @param bool $stripBefore
@@ -93,9 +86,9 @@ class Mage_Bundle_Model_Mysql4_Option_Collection extends Mage_Core_Model_Mysql4_
         }
 
         if (!$this->_selectionsAppended) {
-            foreach ($selectionsCollection->getItems() as $key => $_selection) {
+            foreach ($selectionsCollection->getItems() as $key=>$_selection) {
                 if ($_option = $this->getItemById($_selection->getOptionId())) {
-                    if ($appendAll || ($_selection->isSalable() && !$_selection->getRequiredOptions())) {
+                    if ((!$appendAll && $_selection->isSalable() && !$_selection->getRequiredOptions()) || $appendAll) {
                         $_selection->setOption($_option);
                         $_option->addSelection($_selection);
                     } else {
@@ -105,7 +98,6 @@ class Mage_Bundle_Model_Mysql4_Option_Collection extends Mage_Core_Model_Mysql4_
             }
             $this->_selectionsAppended = true;
         }
-
         return $this->getItems();
     }
 
@@ -134,27 +126,4 @@ class Mage_Bundle_Model_Mysql4_Option_Collection extends Mage_Core_Model_Mysql4_
         return $this;
     }
 
-    /**
-     * Reset all item ids cache
-     *
-     * @return Mage_Bundle_Model_Mysql4_Option_Collection
-     */
-    public function resetAllIds()
-    {
-        $this->_itemIds = null;
-        return $this;
-    }
-
-    /**
-     * Retrive all ids for collection
-     *
-     * @return array
-     */
-    public function getAllIds()
-    {
-        if (is_null($this->_itemIds)) {
-            $this->_itemIds = parent::getAllIds();
-        }
-        return $this->_itemIds;
-    }
 }

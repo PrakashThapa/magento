@@ -34,50 +34,6 @@
  */
 class Mage_Catalog_Model_Product_Media_Config implements Mage_Media_Model_Image_Config_Interface
 {
-    /**
-     * Filesystem directory path of product images
-     * relatively to media folder
-     *
-     * @return string
-     */
-    public function getBaseMediaPathAddition()
-    {
-        return 'catalog' . DS . 'product';
-    }
-
-    /**
-     * Web-based directory path of product images
-     * relatively to media folder
-     *
-     * @return string
-     */
-    public function getBaseMediaUrlAddition()
-    {
-        return 'catalog/product';
-    }
-
-    /**
-     * Filesystem directory path of temporary product images
-     * relatively to media folder
-     *
-     * @return string
-     */
-    public function getBaseTmpMediaPathAddition()
-    {
-        return 'tmp' . DS . $this->getBaseMediaPathAddition();
-    }
-
-    /**
-     * Web-based directory path of temporary product images
-     * relatively to media folder
-     *
-     * @return string
-     */
-    public function getBaseTmpMediaUrlAddition()
-    {
-        return 'tmp/' . $this->getBaseMediaUrlAddition();
-    }
-
     public function getBaseMediaPath()
     {
         return Mage::getBaseDir('media') . DS . 'catalog' . DS . 'product';
@@ -90,12 +46,12 @@ class Mage_Catalog_Model_Product_Media_Config implements Mage_Media_Model_Image_
 
     public function getBaseTmpMediaPath()
     {
-        return Mage::getBaseDir('media') . DS . $this->getBaseTmpMediaPathAddition();
+        return Mage::getBaseDir('media') . DS . 'tmp' . DS . 'catalog' . DS . 'product';
     }
 
     public function getBaseTmpMediaUrl()
     {
-        return Mage::getBaseUrl('media') . $this->getBaseTmpMediaUrlAddition();
+        return Mage::getBaseUrl('media') . 'tmp/catalog/product';
     }
 
     public function getMediaUrl($file)
@@ -125,43 +81,10 @@ class Mage_Catalog_Model_Product_Media_Config implements Mage_Media_Model_Image_
         $file = $this->_prepareFileForUrl($file);
 
         if(substr($file, 0, 1) == '/') {
-            $file = substr($file, 1);
+            return $this->getBaseTmpMediaUrl() . $file;
         }
 
         return $this->getBaseTmpMediaUrl() . '/' . $file;
-    }
-
-    /**
-     * Part of URL of temporary product images
-     * relatively to media folder
-     *
-     * @return string
-     */
-    public function getTmpMediaShortUrl($file)
-    {
-        $file = $this->_prepareFileForUrl($file);
-
-        if(substr($file, 0, 1) == '/') {
-            $file = substr($file, 1);
-        }
-
-        return $this->getBaseTmpMediaUrlAddition() . '/' . $file;
-    }
-
-    /**
-     * Part of URL of product images relatively to media folder
-     *
-     * @return string
-     */
-    public function getMediaShortUrl($file)
-    {
-        $file = $this->_prepareFileForUrl($file);
-
-        if(substr($file, 0, 1) == '/') {
-            $file = substr($file, 1);
-        }
-
-        return $this->getBaseMediaUrlAddition() . '/' . $file;
     }
 
     public function getTmpMediaPath($file)

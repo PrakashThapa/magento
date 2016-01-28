@@ -73,7 +73,7 @@ class Mage_Adminhtml_Block_Report_Product_Sold_Grid extends Mage_Adminhtml_Block
     {
         $this->addColumn('name', array(
             'header'    =>Mage::helper('reports')->__('Product Name'),
-            'index'     =>'order_items_name'
+            'index'     =>'name'
         ));
 
         $this->addColumn('ordered_qty', array(
@@ -86,7 +86,7 @@ class Mage_Adminhtml_Block_Report_Product_Sold_Grid extends Mage_Adminhtml_Block
         ));
 
         $this->addExportType('*/*/exportSoldCsv', Mage::helper('reports')->__('CSV'));
-        $this->addExportType('*/*/exportSoldExcel', Mage::helper('reports')->__('Excel XML'));
+        $this->addExportType('*/*/exportSoldExcel', Mage::helper('reports')->__('Excel'));
 
         return parent::_prepareColumns();
     }

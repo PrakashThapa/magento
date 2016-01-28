@@ -122,7 +122,7 @@ class Mage_PaypalUk_Model_Api_Nvp extends Mage_Paypal_Model_Api_Nvp
         'ACCT'           => 'credit_card_number',
         'EXPDATE'        => 'credit_card_expiration_date',
         'CVV2'           => 'credit_card_cvv2',
-        'CARDSTART'      => 'maestro_solo_issue_date', // MMYY, including leading zero
+        'CARDSTART'      => 'maestro_solo_issue_date', // MMYYYY, always six chars, including leading zero
         'CARDISSUE'    => 'maestro_solo_issue_number',
         'CVV2MATCH'      => 'cvv2_check_result',
         // cardinal centinel
@@ -251,7 +251,7 @@ class Mage_PaypalUk_Model_Api_Nvp extends Mage_Paypal_Model_Api_Nvp
         'SALUTATION' => 'prefix',
         'SUFFIX' => 'suffix',
 
-        'COUNTRYCODE' => 'country_id', // iso-3166 two-character code
+        'COUNTRY' => 'country_id', // iso-3166 two-character code
         'STATE'    => 'region',
         'CITY'     => 'city',
         'STREET'   => 'street',
@@ -264,7 +264,7 @@ class Mage_PaypalUk_Model_Api_Nvp extends Mage_Paypal_Model_Api_Nvp
      * Line items export mapping settings
      * @var array
      */
-    protected $_lineItemTotalExportMap = array();
+    protected $_lineItemExportTotals = array();
     protected $_lineItemExportItemsFormat = array(
         'name'   => 'L_NAME%d',
         'qty'    => 'L_QTY%d',
@@ -280,15 +280,6 @@ class Mage_PaypalUk_Model_Api_Nvp extends Mage_Paypal_Model_Api_Nvp
         'PAYMENTSTATUS', 'PENDINGREASON', 'PROTECTIONELIGIBILITY', 'EMAIL',
     );
 
-    /**
-     * Required fields in the response
-     *
-     * @var array
-     */
-    protected $_requiredResponseParams = array(
-        self::DO_DIRECT_PAYMENT => array('RESULT', 'PNREF', 'PPREF')
-    );
-        
     /**
      * API endpoint getter
      *
@@ -350,19 +341,6 @@ class Mage_PaypalUk_Model_Api_Nvp extends Mage_Paypal_Model_Api_Nvp
             return self::TENDER_PAYPAL;
         }
         return self::TENDER_CC;
-    }
-
-    /**
-     * Override transaction id getting to process payflow accounts not assigned to paypal side
-     *
-     * @return string
-     */
-    public function getPaypalTransactionId()
-    {
-        if ($this->getData('paypal_transaction_id')) {
-            return $this->getData('paypal_transaction_id');
-        }
-        return $this->getTransactionId();
     }
 
     /**
@@ -525,19 +503,5 @@ class Mage_PaypalUk_Model_Api_Nvp extends Mage_Paypal_Model_Api_Nvp
     protected function _prepareExpressCheckoutCallRequest(&$requestFields)
     {
         return $requestFields;
-    }
-
-    /**
-     * Adopt specified request array to be compatible with Paypal
-     * Puerto Rico should be as state of USA and not as a country
-     *
-     * @param array $request
-     */
-    protected function _applyCountryWorkarounds(&$request)
-    {
-        if (isset($request['SHIPTOCOUNTRY']) && $request['SHIPTOCOUNTRY'] == 'PR') {
-            $request['SHIPTOCOUNTRY'] = 'US';
-            $request['SHIPTOSTATE']   = 'PR';
-        }
     }
 }

@@ -131,28 +131,16 @@ class Varien_File_Uploader
 
     const SINGLE_STYLE = 0;
     const MULTIPLE_STYLE = 1;
-    const TMP_NAME_EMPTY = 666;
 
     function __construct($fileId)
     {
         $this->_setUploadFileId($fileId);
         if( !file_exists($this->_file['tmp_name']) ) {
-            $code = empty($this->_file['tmp_name']) ? self::TMP_NAME_EMPTY : 0;
-            throw new Exception('File was not uploaded.', $code);
+            throw new Exception('File was not uploaded.');
+            return;
         } else {
             $this->_fileExists = true;
         }
-    }
-
-    /**
-     * After save logic
-     *
-     * @param  array $result
-     * @return Varien_File_Uploader
-     */
-    protected function _afterSave($result)
-    {
-        return $this;
     }
 
     /**
@@ -206,11 +194,10 @@ class Varien_File_Uploader
             $result = $this->_file;
             $result['path'] = $destinationFolder;
             $result['file'] = $fileName;
-
-            $this->_afterSave($result);
+            return $result;
+        } else {
+            return $result;
         }
-
-        return $result;
     }
 
     /**

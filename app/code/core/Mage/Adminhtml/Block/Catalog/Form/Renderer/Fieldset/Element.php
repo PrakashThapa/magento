@@ -96,19 +96,8 @@ class Mage_Adminhtml_Block_Catalog_Form_Renderer_Fieldset_Element extends Mage_A
      */
     public function usedDefault()
     {
-        $attributeCode = $this->getAttribute()->getAttributeCode();
-        $defaultValue = $this->getDataObject()->getAttributeDefaultValue($attributeCode);
-
-        if (!$this->getDataObject()->getExistsStoreValueFlag($attributeCode)) {
-            return true;
-        } else if ($this->getElement()->getValue() == $defaultValue && 
-                   $this->getDataObject()->getStoreId() != $this->_getDefaultStoreId()) {
-            return false;
-        }
-        if ($defaultValue === false && !$this->getAttribute()->getIsRequired() && $this->getElement()->getValue()) {
-            return false;
-        }
-        return $defaultValue === false;
+        $devaultValue = $this->getDataObject()->getAttributeDefaultValue($this->getAttribute()->getAttributeCode());
+        return $devaultValue === false;
     }
 
     /**
@@ -169,15 +158,5 @@ class Mage_Adminhtml_Block_Catalog_Form_Renderer_Fieldset_Element extends Mage_A
     public function getElementHtml()
     {
         return $this->getElement()->getElementHtml();
-    }
-
-    /**
-     * Default sore ID getter
-     *
-     * @return integer
-     */
-    protected function _getDefaultStoreId()
-    {
-        return Mage_Catalog_Model_Abstract::DEFAULT_STORE_ID;
     }
 }

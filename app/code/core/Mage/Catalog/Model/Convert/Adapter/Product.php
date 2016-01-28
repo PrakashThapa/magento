@@ -69,11 +69,6 @@ class Mage_Catalog_Model_Convert_Adapter_Product
 
     protected $_ignoreFields = array();
 
-    /**
-     * @deprecated after 1.5.0.0-alpha2
-     *
-     * @var array
-     */
     protected $_imageFields = array();
 
     /**
@@ -100,7 +95,7 @@ class Mage_Catalog_Model_Convert_Adapter_Product
     {
         $attrFilterArray = array();
         $attrFilterArray ['name']           = 'like';
-        $attrFilterArray ['sku']            = 'startsWith';
+        $attrFilterArray ['sku']            = 'like';
         $attrFilterArray ['type']           = 'eq';
         $attrFilterArray ['attribute_set']  = 'eq';
         $attrFilterArray ['visibility']     = 'eq';
@@ -345,6 +340,9 @@ class Mage_Catalog_Model_Convert_Adapter_Product
             }
             if ($node->is('ignore')) {
                 $this->_ignoreFields[] = $code;
+            }
+            if ($node->is('img')) {
+                $this->_imageFields[] = $code;
             }
             if ($node->is('to_number')) {
                 $this->_toNumber[] = $code;
@@ -599,7 +597,7 @@ class Mage_Catalog_Model_Convert_Adapter_Product
 
         if (isset($importData['websites'])) {
             $websiteIds = $product->getWebsiteIds();
-            if (!is_array($websiteIds) || !$store->getId()) {
+            if (!is_array($websiteIds)) {
                 $websiteIds = array();
             }
             $websiteCodes = explode(',', $importData['websites']);
@@ -620,7 +618,7 @@ class Mage_Catalog_Model_Convert_Adapter_Product
             if (in_array($field, $this->_inventoryFields)) {
                 continue;
             }
-            if (is_null($value)) {
+            if (in_array($field, $this->_imageFields)) {
                 continue;
             }
 
@@ -684,41 +682,21 @@ class Mage_Catalog_Model_Convert_Adapter_Product
         }
         $product->setStockData($stockData);
 
-        $mediaGalleryBackendModel = $this->getAttribute('media_gallery')->getBackend();
-
-        $arrayToMassAdd = array();
-
-        foreach ($product->getMediaAttributes() as $mediaAttributeCode => $mediaAttribute) {
-            if (isset($importData[$mediaAttributeCode])) {
-                $file = $importData[$mediaAttributeCode];
-                if (trim($file) && !$mediaGalleryBackendModel->getImage($product, $file)) {
-                    $arrayToMassAdd[] = array('file' => trim($file), 'mediaAttribute' => $mediaAttributeCode);
+        $imageData = array();
+        foreach ($this->_imageFields as $field) {
+            if (!empty($importData[$field]) && $importData[$field] != 'no_selection') {
+                if (!isset($imageData[$importData[$field]])) {
+                    $imageData[$importData[$field]] = array();
                 }
+                $imageData[$importData[$field]][] = $field;
             }
         }
 
-        $addedFilesCorrespondence =
-            $mediaGalleryBackendModel->addImagesWithDifferentMediaAttributes($product, $arrayToMassAdd, Mage::getBaseDir('media') . DS . 'import', false, false);
-
-        foreach ($product->getMediaAttributes() as $mediaAttributeCode => $mediaAttribute) {
-            $addedFile = '';
-            if (isset($importData[$mediaAttributeCode . '_label'])) {
-                $fileLabel = trim($importData[$mediaAttributeCode . '_label']);
-                if (isset($importData[$mediaAttributeCode])) {
-                    $keyInAddedFile = array_search($importData[$mediaAttributeCode],
-                        $addedFilesCorrespondence['alreadyAddedFiles']);
-                    if ($keyInAddedFile !== false) {
-                        $addedFile = $addedFilesCorrespondence['alreadyAddedFilesNames'][$keyInAddedFile];
-                    }
-                }
-
-                if (!$addedFile) {
-                    $addedFile = $product->getData($mediaAttributeCode);
-                }
-                if ($fileLabel && $addedFile) {
-                    $mediaGalleryBackendModel->updateImage($product, $addedFile, array('label' => $fileLabel));
-                }
+        foreach ($imageData as $file => $fields) {
+            try {
+                $product->addImageToMediaGallery(Mage::getBaseDir('media') . DS . 'import' . trim($file), $fields);
             }
+            catch (Exception $e) {}
         }
 
         $product->setIsMassupdate(true);

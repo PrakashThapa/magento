@@ -44,7 +44,7 @@ class Mage_Catalog_Model_Product_Api_V2 extends Mage_Catalog_Model_Product_Api
     public function items($filters = null, $store = null)
     {
         $collection = Mage::getModel('catalog/product')->getCollection()
-            ->addStoreFilter($this->_getStoreId($store))
+            ->setStoreId($this->_getStoreId($store))
             ->addAttributeToSelect('name');
 
         $preparedFilters = array();
@@ -308,10 +308,8 @@ class Mage_Catalog_Model_Product_Api_V2 extends Mage_Catalog_Model_Product_Api
             foreach ($productData->stock_data as $key => $value) {
                 $_stockData[$key] = $value;
             }
-        } else {
-            $_stockData = array('use_config_manage_stock' => 0);
+            $product->setStockData($_stockData);
         }
-        $product->setStockData($_stockData);
 
         if (property_exists($productData, 'tier_price')) {
              $tierPrices = Mage::getModel('catalog/product_attribute_tierprice_api_V2')->prepareTierPrices($product, $productData->tier_price);

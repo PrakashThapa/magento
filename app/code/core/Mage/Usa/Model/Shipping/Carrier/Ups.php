@@ -47,13 +47,6 @@ class Mage_Usa_Model_Shipping_Carrier_Ups
 
     protected $_defaultCgiGatewayUrl = 'http://www.ups.com:80/using/services/rave/qcostcgi.cgi';
 
-    /**
-     * Base currency rate
-     *
-     * @var double
-     */
-    protected $_baseCurrencyRate;
-
     public function collectRates(Mage_Shipping_Model_Rate_Request $request)
     {
         if (!$this->getConfigFlag('active')) {
@@ -143,11 +136,6 @@ class Mage_Usa_Model_Shipping_Carrier_Ups
         //for UPS, puero rico state for US will assume as puerto rico country
         if ($destCountry==self::USA_COUNTRY_ID && ($request->getDestPostcode()=='00912' || $request->getDestRegionCode()==self::PUERTORICO_COUNTRY_ID)) {
             $destCountry = self::PUERTORICO_COUNTRY_ID;
-        }
-
-        // For UPS, Guam state of the USA will be represented by Guam country
-        if ($destCountry == self::USA_COUNTRY_ID && $request->getDestRegionCode() == self::GUAM_REGION_CODE) {
-            $destCountry = self::GUAM_COUNTRY_ID;
         }
 
         $r->setDestCountry(Mage::getModel('directory/country')->load($destCountry)->getIso2Code());
@@ -256,32 +244,25 @@ class Mage_Usa_Model_Shipping_Carrier_Ups
             'weight_std'     => strtolower($r->getUnitMeasure()),
         );
         $params['47_rate_chart'] = $params['47_rate_chart']['label'];
-
-        $responseBody = $this->_getCachedQuotes($params);
-        if ($responseBody === null) {
-            $debugData = array('request' => $params);
-            try {
-                $url = $this->getConfigData('gateway_url');
-                if (!$url) {
-                    $url = $this->_defaultCgiGatewayUrl;
-                }
-                $client = new Zend_Http_Client();
-                $client->setUri($url);
-                $client->setConfig(array('maxredirects'=>0, 'timeout'=>30));
-                $client->setParameterGet($params);
-                $response = $client->request();
-                $responseBody = $response->getBody();
-
-                $debugData['result'] = $responseBody;
-                $this->_setCachedQuotes($params, $responseBody);
+        $debugData = array('request' => $params);
+        try {
+            $url = $this->getConfigData('gateway_url');
+            if (!$url) {
+                $url = $this->_defaultCgiGatewayUrl;
             }
-            catch (Exception $e) {
-                $debugData['result'] = array('error' => $e->getMessage(), 'code' => $e->getCode());
-                $responseBody = '';
-            }
-            $this->_debug($debugData);
+            $client = new Zend_Http_Client();
+            $client->setUri($url);
+            $client->setConfig(array('maxredirects'=>0, 'timeout'=>30));
+            $client->setParameterGet($params);
+            $response = $client->request();
+            $responseBody = $response->getBody();
+            $debugData['result'] = $responseBody;
         }
-
+        catch (Exception $e) {
+            $debugData['result'] = array('error' => $e->getMessage(), 'code' => $e->getCode());
+            $responseBody = '';
+        }
+        $this->_debug($debugData);
         return $this->_parseCgiResponse($responseBody);
     }
 
@@ -568,14 +549,8 @@ class Mage_Usa_Model_Shipping_Carrier_Ups
             '48_container'   => $r->getContainer(),
             '49_residential' => $r->getDestType(),
         );
-
-        if ($params['10_action'] == '4') {
-            $params['10_action'] = 'Shop';
-            $serviceCode = null; // Service code is not relevant when we're asking ALL possible services' rates
-        } else {
-            $params['10_action'] = 'Rate';
-            $serviceCode = $r->getProduct() ? $r->getProduct() : '';
-        }
+        $params['10_action'] = $params['10_action']=='4'? 'Shop' : 'Rate';
+        $serviceCode = $r->getProduct() ? $r->getProduct() : '';
         $serviceDescription = $serviceCode ? $this->getShipmentByCode($serviceCode) : '';
 
 $xmlRequest .= <<< XMLRequest
@@ -595,16 +570,11 @@ $xmlRequest .= <<< XMLRequest
   </PickupType>
 
   <Shipment>
-XMLRequest;
 
-        if ($serviceCode !== null) {
-            $xmlRequest .= "<Service>" .
-                "<Code>{$serviceCode}</Code>" .
-                "<Description>{$serviceDescription}</Description>" .
-                "</Service>";
-        }
-
-      $xmlRequest .= <<< XMLRequest
+      <Service>
+          <Code>{$serviceCode}</Code>
+          <Description>{$serviceDescription}</Description>
+      </Service>
       <Shipper>
 XMLRequest;
 
@@ -661,48 +631,26 @@ $xmlRequest .= <<< XMLRequest
 XMLRequest;
 
 
-        $xmlResponse = $this->_getCachedQuotes($xmlRequest);
-        if ($xmlResponse === null) {
-            $debugData = array('request' => $xmlRequest);
-            try {
-                $ch = curl_init();
-                curl_setopt($ch, CURLOPT_URL, $url);
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-                curl_setopt($ch, CURLOPT_HEADER, 0);
-                curl_setopt($ch, CURLOPT_POST, 1);
-                curl_setopt($ch, CURLOPT_POSTFIELDS, $xmlRequest);
-                curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, (boolean)$this->getConfigFlag('mode_xml'));
-                $xmlResponse = curl_exec ($ch);
-
-                $debugData['result'] = $xmlResponse;
-                $this->_setCachedQuotes($xmlRequest, $xmlResponse);
-            }
-            catch (Exception $e) {
-                $debugData['result'] = array('error' => $e->getMessage(), 'code' => $e->getCode());
-                $xmlResponse = '';
-            }
-            $this->_debug($debugData);
+        $debugData = array('request' => $xmlRequest);
+        try {
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+            curl_setopt($ch, CURLOPT_HEADER, 0);
+            curl_setopt($ch, CURLOPT_POST, 1);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $xmlRequest);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, (boolean)$this->getConfigFlag('mode_xml'));
+            $xmlResponse = curl_exec ($ch);
+            $debugData['result'] = $xmlResponse;
+        }
+        catch (Exception $e) {
+            $debugData['result'] = array('error' => $e->getMessage(), 'code' => $e->getCode());
+            $xmlResponse = '';
         }
 
+        $this->_debug($debugData);
         return $this->_parseXmlResponse($xmlResponse);
-    }
-
-    /**
-     * Get base currency rate
-     *
-     * @param string $code
-     * @return double
-     */
-    protected function _getBaseCurrencyRate($code)
-    {
-        if (!$this->_baseCurrencyRate) {
-            $this->_baseCurrencyRate = Mage::getModel('directory/currency')
-                ->load($code)
-                ->getAnyRate($this->_request->getBaseCurrency()->getCode());
-        }
-
-        return $this->_baseCurrencyRate;
     }
 
     protected function _parseXmlResponse($xmlResponse)
@@ -714,7 +662,7 @@ XMLRequest;
             $xml->loadString($xmlResponse);
             $arr = $xml->getXpath("//RatingServiceSelectionResponse/Response/ResponseStatusCode/text()");
             $success = (int)$arr[0];
-            if ($success===1) {
+            if($success===1){
                 $arr = $xml->getXpath("//RatingServiceSelectionResponse/RatedShipment");
                 $allowedMethods = explode(",", $this->getConfigData('allowed_methods'));
 
@@ -723,8 +671,6 @@ XMLRequest;
                 $negotiatedActive = $this->getConfigFlag('negotiated_active')
                     && $this->getConfigData('shipper_number')
                     && !empty($negotiatedArr);
-
-                $allowedCurrencies = Mage::getModel('directory/currency')->getConfigAllowCurrencies();
 
                 foreach ($arr as $shipElement){
                     $code = (string)$shipElement->Service->Code;
@@ -737,29 +683,8 @@ XMLRequest;
                             $cost = $shipElement->TotalCharges->MonetaryValue;
                         }
 
-                        //convert price with Origin country currency code to base currency code
-                        $successConversion = true;
-                        $responseCurrencyCode = (string) $shipElement->TotalCharges->CurrencyCode;
-                        if ($responseCurrencyCode) {
-                            if (in_array($responseCurrencyCode, $allowedCurrencies)) {
-                                $cost *= $this->_getBaseCurrencyRate($responseCurrencyCode);
-                            } else {
-                                $errorTitle = Mage::helper('directory')
-                                    ->__('Can\'t convert rate from "%s-%s".',
-                                        $responseCurrencyCode,
-                                        $this->_request->getPackageCurrency()->getCode());
-                                $error = Mage::getModel('shipping/rate_result_error');
-                                $error->setCarrier('ups');
-                                $error->setCarrierTitle($this->getConfigData('title'));
-                                $error->setErrorMessage($errorTitle);
-                                $successConversion = false;
-                            }
-                        }
-
-                        if ($successConversion) {
-                            $costArr[$code] = $cost;
-                            $priceArr[$code] = $this->getMethodPrice(floatval($cost),$code);
-                        }
+                        $costArr[$code] = $cost;
+                        $priceArr[$code] = $this->getMethodPrice(floatval($cost),$code);
                     }
                 }
             } else {
@@ -768,7 +693,7 @@ XMLRequest;
                 $error = Mage::getModel('shipping/rate_result_error');
                 $error->setCarrier('ups');
                 $error->setCarrierTitle($this->getConfigData('title'));
-                Mage::log($errorTitle);
+                //$error->setErrorMessage($errorTitle);
                 $error->setErrorMessage($this->getConfigData('specificerrmsg'));
             }
         }
@@ -782,7 +707,7 @@ XMLRequest;
             if(!isset($errorTitle)){
                 $errorTitle = Mage::helper('usa')->__('Cannot retrieve shipping rates');
             }
-            Mage::log($errorTitle);
+            //$error->setErrorMessage($errorTitle);
             $error->setErrorMessage($this->getConfigData('specificerrmsg'));
             $result->append($error);
         } else {
@@ -1037,12 +962,12 @@ XMLAuth;
      */
     public function getAllowedMethods()
     {
-         $allowed = explode(',', $this->getConfigData('allowed_methods'));
-         $arr = array();
-         $isByCode = $this->getConfigData('type') == 'UPS_XML';
-         foreach ($allowed as $k) {
-             $arr[$k] = $isByCode ? $this->getShipmentByCode($k) : $this->getCode('method', $k);
-         }
-         return $arr;
+        $allowed = explode(',', $this->getConfigData('allowed_methods'));
+        $arr = array();
+        foreach ($allowed as $k) {
+            $arr[$k] = $this->getCode('method', $k);
+        }
+        return $arr;
     }
+
 }

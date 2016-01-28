@@ -28,7 +28,7 @@
 <config>
     <modules>
         <Mage_Tax>
-            <version>1.4.0.1</version>
+            <version>1.4.0.0</version>
         </Mage_Tax>
     </modules>
     <global>
@@ -124,14 +124,6 @@
                     </tax>
                 </observers>
             </catalog_product_collection_load_after>
-            <sales_quote_collect_totals_before>
-                <observers>
-                    <tax>
-                        <class>tax/observer</class>
-                        <method>quoteCollectTotalsBefore</method>
-                    </tax>
-                </observers>
-            </sales_quote_collect_totals_before>
         </events>
         <sales>
             <quote>

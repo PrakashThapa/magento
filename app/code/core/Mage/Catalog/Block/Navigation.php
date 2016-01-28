@@ -37,13 +37,6 @@ class Mage_Catalog_Block_Navigation extends Mage_Core_Block_Template
     protected $_categoryInstance = null;
 
     /**
-     * Current category key
-     *
-     * @var string
-     */
-    protected $_currentCategoryKey;
-
-    /**
      * Array of level position counters
      *
      * @var array
@@ -65,45 +58,24 @@ class Mage_Catalog_Block_Navigation extends Mage_Core_Block_Template
      */
     public function getCacheKeyInfo()
     {
-        $shortCacheId = array(
+        return array(
             'CATALOG_NAVIGATION',
             Mage::app()->getStore()->getId(),
             Mage::getDesign()->getPackageName(),
             Mage::getDesign()->getTheme('template'),
             Mage::getSingleton('customer/session')->getCustomerGroupId(),
             'template' => $this->getTemplate(),
-            'name' => $this->getNameInLayout(),
             $this->getCurrenCategoryKey()
         );
-        $cacheId = $shortCacheId;
-
-        $shortCacheId = array_values($shortCacheId);
-        $shortCacheId = implode('|', $shortCacheId);
-        $shortCacheId = md5($shortCacheId);
-
-        $cacheId['category_path'] = $this->getCurrenCategoryKey();
-        $cacheId['short_cache_id'] = $shortCacheId;
-
-        return $cacheId;
     }
 
-    /**
-     * Get current category key
-     *
-     * @return mixed
-     */
     public function getCurrenCategoryKey()
     {
-        if (!$this->_currentCategoryKey) {
-            $category = Mage::registry('current_category');
-            if ($category) {
-                $this->_currentCategoryKey = $category->getPath();
-            } else {
-                $this->_currentCategoryKey = Mage::app()->getStore()->getRootCategoryId();
-            }
+        if ($category = Mage::registry('current_category')) {
+            return $category->getPath();
+        } else {
+            return Mage::app()->getStore()->getRootCategoryId();
         }
-
-        return $this->_currentCategoryKey;
     }
 
     /**
@@ -247,13 +219,13 @@ class Mage_Catalog_Block_Navigation extends Mage_Core_Block_Template
         $classes = array();
         $classes[] = 'level' . $level;
         $classes[] = 'nav-' . $this->_getItemPosition($level);
-        if ($this->isCategoryActive($category)) {
-            $classes[] = 'active';
-        }
         $linkClass = '';
         if ($isOutermost && $outermostItemClass) {
             $classes[] = $outermostItemClass;
             $linkClass = ' class="'.$outermostItemClass.'"';
+        }
+        if ($this->isCategoryActive($category)) {
+            $classes[] = 'active';
         }
         if ($isFirst) {
             $classes[] = 'first';

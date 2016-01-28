@@ -71,13 +71,10 @@ class Mage_Adminhtml_Block_Sales_Order_Invoice_View extends Mage_Adminhtml_Block
             ));
         }
 
-        $orderPayment = $this->getInvoice()->getOrder()->getPayment();
-
         if ($this->_isAllowedAction('creditmemo') && $this->getInvoice()->getOrder()->canCreditmemo()) {
-            if (($orderPayment->canRefundPartialPerInvoice()
-                && $this->getInvoice()->canRefund()
-                && $orderPayment->getAmountPaid() > $orderPayment->getAmountRefunded())
-                || ($orderPayment->canRefund() && !$this->getInvoice()->getIsUsedForRefund())) {
+            if ($this->getInvoice()->getOrder()->getPayment()->canRefundPartialPerInvoice()
+                || !$this->getInvoice()->getIsUsedForRefund())
+            {
                 $this->_addButton('capture', array( // capture?
                     'label'     => Mage::helper('sales')->__('Credit Memo'),
                     'class'     => 'go',

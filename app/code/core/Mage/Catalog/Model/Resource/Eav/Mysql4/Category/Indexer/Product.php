@@ -31,13 +31,6 @@ class Mage_Catalog_Model_Resource_Eav_Mysql4_Category_Indexer_Product extends Ma
     protected $_storeTable;
     protected $_groupTable;
 
-    /**
-     * Array of info about stores
-     *
-     * @var array
-     */
-    protected $_storesInfo;
-
     protected function _construct()
     {
         $this->_init('catalog/category_product_index', 'category_id');
@@ -159,24 +152,6 @@ class Mage_Catalog_Model_Resource_Eav_Mysql4_Category_Indexer_Product extends Ma
     }
 
     /**
-     * Return array of used root category id - path pairs
-     *
-     * @return array
-     */
-    protected function _getRootCategories()
-    {
-        $rootCategories = array();
-        $stores = $this->_getStoresInfo();
-        foreach ($stores as $storeInfo) {
-            if ($storeInfo['root_id']) {
-                $rootCategories[$storeInfo['root_id']] = $storeInfo['root_path'];
-            }
-        }
-
-        return $rootCategories;
-    }
-
-    /**
      * Process category index after category save
      *
      * @param Mage_Index_Model_Event $event
@@ -185,24 +160,13 @@ class Mage_Catalog_Model_Resource_Eav_Mysql4_Category_Indexer_Product extends Ma
     {
         $data = $event->getNewData();
 
-        $checkRootCategories        = false;
-        $processRootCategories      = false;
-        $affectedRootCategoryIds    = array();
-        $rootCategories             = $this->_getRootCategories();
-
         /**
          * Check if we have reindex category move results
          */
         if (isset($data['affected_category_ids'])) {
-            $categoryIds = $data['affected_category_ids'];
-            $checkRootCategories = true;
+            $categoryIds = $event->getNewData('affected_category_ids');
         } else if (isset($data['products_was_changed'])) {
             $categoryIds = array($event->getEntityPk());
-
-            if (isset($rootCategories[$event->getEntityPk()])) {
-                $processRootCategories = true;
-                $affectedRootCategoryIds[] = $event->getEntityPk();
-            }
         } else {
             return;
         }
@@ -213,25 +177,14 @@ class Mage_Catalog_Model_Resource_Eav_Mysql4_Category_Indexer_Product extends Ma
         $paths = $this->_getWriteAdapter()->fetchCol($select);
         $allCategoryIds = array();
         foreach ($paths as $path) {
-            if ($checkRootCategories) {
-                foreach ($rootCategories as $rootCategoryId => $rootCategoryPath) {
-                    if (strpos($path, sprintf('%d/', $rootCategoryPath)) === 0 || $path == $rootCategoryPath) {
-                        $affectedRootCategoryIds[$rootCategoryId] = $rootCategoryId;
-                    }
-                }
-            }
             $allCategoryIds = array_merge($allCategoryIds, explode('/', $path));
         }
         $allCategoryIds = array_unique($allCategoryIds);
 
-        if ($checkRootCategories && count($affectedRootCategoryIds) > 1) {
-            $processRootCategories = true;
-        }
-
         /**
          * retrieve anchor category id
          */
-        $anchorInfo = $this->_getAnchorAttributeInfo();
+        $anchorInfo     = $this->_getAnchorAttributeInfo();
         $select = $this->_getReadAdapter()->select()
             ->distinct(true)
             ->from(array('ce' => $this->_categoryTable), array('entity_id'))
@@ -241,135 +194,20 @@ class Mage_Catalog_Model_Resource_Eav_Mysql4_Category_Indexer_Product extends Ma
                 array())
              ->where('dca.value=1')
              ->where('ce.entity_id IN (?)', $allCategoryIds);
-
         $anchorIds = $this->_getWriteAdapter()->fetchCol($select);
         /**
          * delete only anchor id and category ids
          */
-        $deleteCategoryIds = array_unique(array_merge($anchorIds, $categoryIds));
+        $deleteCategoryIds = array_merge($anchorIds,$categoryIds);
 
         $this->_getWriteAdapter()->delete(
             $this->getMainTable(),
             $this->_getWriteAdapter()->quoteInto('category_id IN(?)', $deleteCategoryIds)
         );
 
-        $directIds = array_diff($categoryIds, $anchorIds);
-        if ($anchorIds) {
-            $this->_refreshAnchorRelations($anchorIds);
-        }
-        if ($directIds) {
-            $this->_refreshDirectRelations($directIds);
-        }
-
-        /**
-         * Need to re-index affected root category ids when its are not anchor
-         */
-        if ($processRootCategories) {
-            $reindexRootCategoryIds = array_diff($affectedRootCategoryIds, $anchorIds);
-            if ($reindexRootCategoryIds) {
-                $this->_refreshNotAnchorRootCategories($reindexRootCategoryIds);
-            }
-        }
-    }
-
-    /**
-     * Reindex not anchor root categories
-     *
-     * @param array $categoryIds
-     * @return Mage_Catalog_Model_Resource_Eav_Mysql4_Category_Indexer_Product
-     */
-    protected function _refreshNotAnchorRootCategories(array $categoryIds = null)
-    {
-        if (empty($categoryIds)) {
-            return $this;
-        }
-
-        // remove anchor relations
-        $where = array(
-            'category_id IN(?)' => $categoryIds,
-            'is_parent=?'       => 0
-        );
-        $this->_getWriteAdapter()->delete($this->getMainTable(), $where);
-
-        $stores = $this->_getStoresInfo();
-        /**
-         * Build index for each store
-         */
-        foreach ($stores as $storeData) {
-            $storeId    = $storeData['store_id'];
-            $websiteId  = $storeData['website_id'];
-            $rootPath   = $storeData['root_path'];
-            $rootId     = $storeData['root_id'];
-            if (!in_array($rootId, $categoryIds)) {
-                continue;
-            }
-
-            $select = $this->_getWriteAdapter()->select()
-                ->distinct(true)
-                ->from(array('cc' => $this->getTable('catalog/category')), null)
-                ->join(
-                    array('i' => $this->getMainTable()),
-                    'i.category_id = cc.entity_id and i.store_id = 1',
-                    array())
-                ->joinLeft(
-                    array('ie' => $this->getMainTable()),
-                    'ie.category_id = ' . (int)$rootId . ' AND ie.product_id=i.product_id AND ie.store_id = ' . (int)$storeId,
-                    array())
-                ->where('cc.path LIKE ?', $rootPath . '/%')
-                ->where('ie.category_id IS NULL')
-                ->columns(array(
-                    'category_id'   => new Zend_Db_Expr($rootId),
-                    'product_id'    => 'i.product_id',
-                    'position'      => new Zend_Db_Expr('0'),
-                    'is_parent'     => new Zend_Db_Expr('0'),
-                    'store_id'      => new Zend_Db_Expr($storeId),
-                    'visibility'    => 'i.visibility'
-                ));
-            $query = $select->insertFromSelect($this->getMainTable());
-            $this->_getWriteAdapter()->query($query);
-
-            $visibilityInfo = $this->_getVisibilityAttributeInfo();
-            $statusInfo     = $this->_getStatusAttributeInfo();
-
-            $select = $this->_getReadAdapter()->select()
-                ->from(array('pw' => $this->_productWebsiteTable), array())
-                ->joinLeft(
-                    array('i' => $this->getMainTable()),
-                    'i.product_id = pw.product_id AND i.category_id = ' . (int)$rootId . ' AND i.store_id = ' . (int) $storeId,
-                    array())
-                ->join(
-                    array('dv' => $visibilityInfo['table']),
-                    "dv.entity_id = pw.product_id AND dv.attribute_id = {$visibilityInfo['id']} AND dv.store_id = 0",
-                    array())
-                ->joinLeft(
-                    array('sv' => $visibilityInfo['table']),
-                    "sv.entity_id = pw.product_id AND sv.attribute_id = {$visibilityInfo['id']} AND sv.store_id = " . (int)$storeId,
-                    array())
-                ->join(
-                    array('ds' => $statusInfo['table']),
-                    "ds.entity_id = pw.product_id AND ds.attribute_id = {$statusInfo['id']} AND ds.store_id = 0",
-                    array())
-                ->joinLeft(
-                    array('ss' => $statusInfo['table']),
-                    "ss.entity_id = pw.product_id AND ss.attribute_id = {$statusInfo['id']} AND ss.store_id = " . (int)$storeId,
-                    array())
-                ->where('i.product_id IS NULL')
-                ->where('pw.website_id=?', $websiteId)
-                ->where('IF(ss.value_id IS NOT NULL, ss.value, ds.value) = ?', Mage_Catalog_Model_Product_Status::STATUS_ENABLED)
-                ->columns(array(
-                    'category_id'   => new Zend_Db_Expr($rootId),
-                    'product_id'    => 'pw.product_id',
-                    'position'      => new Zend_Db_Expr('0'),
-                    'is_parent'     => new Zend_Db_Expr('1'),
-                    'store_id'      => new Zend_Db_Expr($storeId),
-                    'visibility'    => 'IF(sv.value_id IS NOT NULL, sv.value, dv.value)'
-                ));
-
-            $query = $select->insertFromSelect($this->getMainTable());
-            $this->_getWriteAdapter()->query($query);
-        }
-
-        return $this;
+        $anchorIds = array_diff($anchorIds, $categoryIds);
+        $this->_refreshAnchorRelations($anchorIds);
+        $this->_refreshDirectRelations($categoryIds);
     }
 
     /**
@@ -457,18 +295,21 @@ class Mage_Catalog_Model_Resource_Eav_Mysql4_Category_Indexer_Product extends Ma
         /**
          * Insert anchor categories relations
          */
-        $isParent = new Zend_Db_Expr('IF (cp.category_id=ce.entity_id, 1, 0) AS is_parent');
-        $position = new Zend_Db_Expr('IF (cp.category_id=ce.entity_id,
-            cp.position,
-            MIN((cc.position + 1) * (cc.level + 1) * 10000) + cp.position) AS position');
+        $isParent = new Zend_Db_Expr('0');
+        $position = new Zend_Db_Expr('0');
         $select = $this->_getReadAdapter()->select()
-            ->from(array('ce' => $this->_categoryTable), array('entity_id', 'cp.product_id', $position, $isParent))
-            ->joinLeft(array('cc' => $this->_categoryTable), 'cc.path LIKE CONCAT(ce.path, \'/%\')', array())
-            ->joinInner(array('cp' => $this->_categoryProductTable), 'cp.category_id=cc.entity_id OR cp.category_id=ce.entity_id', array())
-            ->joinInner(array('pw' => $this->_productWebsiteTable), 'pw.product_id=cp.product_id', array())
-            ->joinInner(array('g'  => $this->_groupTable), 'g.website_id=pw.website_id', array())
-            ->joinInner(array('s'  => $this->_storeTable), 's.group_id=g.group_id', array('store_id'))
-            ->joinInner(array('rc' => $this->_categoryTable), 'rc.entity_id=g.root_category_id', array())
+            ->distinct(true)
+            ->from(array('ce' => $this->_categoryTable), array('entity_id'))
+            ->joinInner(array('cc'   => $this->_categoryTable), 'cc.path LIKE CONCAT(ce.path, \'/%\')', array())
+            ->joinInner(array('cp'   => $this->_categoryProductTable), 'cp.category_id=cc.entity_id', array())
+            ->joinInner(
+                array('pw'  => $this->_productWebsiteTable),
+                'pw.product_id=cp.product_id',
+                array('product_id', $position, $isParent)
+            )
+            ->joinInner(array('g'   => $this->_groupTable), 'g.website_id=pw.website_id', array())
+            ->joinInner(array('s'   => $this->_storeTable), 's.group_id=g.group_id', array('store_id'))
+            ->joinInner(array('rc'  => $this->_categoryTable), 'rc.entity_id=g.root_category_id', array())
             ->joinLeft(
                 array('dca'=>$anchorInfo['table']),
                 "dca.entity_id=ce.entity_id AND dca.attribute_id={$anchorInfo['id']} AND dca.store_id=0",
@@ -497,8 +338,8 @@ class Mage_Catalog_Model_Resource_Eav_Mysql4_Category_Indexer_Product extends Ma
              * Condition for anchor or root category (all products should be assigned to root)
              */
             ->where('(ce.path LIKE CONCAT(rc.path, \'/%\') AND IF(sca.value_id, sca.value, dca.value)=1) OR ce.entity_id=rc.entity_id')
-            ->where('IF(ss.value_id, ss.value, ds.value)=?', Mage_Catalog_Model_Product_Status::STATUS_ENABLED)
-            ->group(array('ce.entity_id', 'cp.product_id', 's.store_id'));
+            ->where('IF(ss.value_id, ss.value, ds.value)=?', Mage_Catalog_Model_Product_Status::STATUS_ENABLED);
+
         if ($categoryIds) {
             $select->where('ce.entity_id IN (?)', $categoryIds);
         }
@@ -534,24 +375,22 @@ class Mage_Catalog_Model_Resource_Eav_Mysql4_Category_Indexer_Product extends Ma
             ->joinInner(array('s'   => $this->_storeTable), 's.group_id=g.group_id', array())
             ->joinInner(array('rc'  => $this->_categoryTable), 'rc.entity_id=g.root_category_id',
                 array('entity_id'))
+            ->joinLeft(array('cp'   => $this->_categoryProductTable), 'cp.product_id=pw.product_id',
+                array('pw.product_id', $position, $isParent, 's.store_id'))
             ->joinLeft(
-                array('cp' => $this->_categoryProductTable), 'cp.product_id=pw.product_id',
-                array('pw.product_id', $position, $isParent, 's.store_id')
-                )
-            ->joinLeft(
-                array('dv' => $visibilityInfo['table']),
+                array('dv'=>$visibilityInfo['table']),
                 "dv.entity_id=pw.product_id AND dv.attribute_id={$visibilityInfo['id']} AND dv.store_id=0",
                 array())
             ->joinLeft(
-                array('sv' => $visibilityInfo['table']),
+                array('sv'=>$visibilityInfo['table']),
                 "sv.entity_id=pw.product_id AND sv.attribute_id={$visibilityInfo['id']} AND sv.store_id=s.store_id",
                 array('visibility' => 'IF(sv.value_id, sv.value, dv.value)'))
             ->joinLeft(
-                array('ds' => $statusInfo['table']),
+                array('ds'=>$statusInfo['table']),
                 "ds.entity_id=pw.product_id AND ds.attribute_id={$statusInfo['id']} AND ds.store_id=0",
                 array())
             ->joinLeft(
-                array('ss' => $statusInfo['table']),
+                array('ss'=>$statusInfo['table']),
                 "ss.entity_id=pw.product_id AND ss.attribute_id={$statusInfo['id']} AND ss.store_id=s.store_id",
                 array())
             /**
@@ -560,59 +399,21 @@ class Mage_Catalog_Model_Resource_Eav_Mysql4_Category_Indexer_Product extends Ma
             ->where('cp.product_id IS NULL')
             ->where('IF(ss.value_id, ss.value, ds.value)=?', Mage_Catalog_Model_Product_Status::STATUS_ENABLED)
             ->where('pw.product_id IN(?)', $productIds);
-
         $sql = $select->insertFromSelect($this->getMainTable());
         $this->_getWriteAdapter()->query($sql);
-
-        $select = $this->_getReadAdapter()->select()
-            ->from(array('pw' => $this->_productWebsiteTable), array())
-            ->joinInner(array('g' => $this->_groupTable), 'g.website_id = pw.website_id', array())
-            ->joinInner(array('s' => $this->_storeTable), 's.group_id = g.group_id', array())
-            ->joinLeft(array('i'  => $this->getMainTable()), 'i.product_id = pw.product_id AND i.category_id = g.root_category_id', array())
-            ->joinLeft(
-                array('dv' => $visibilityInfo['table']),
-                "dv.entity_id = pw.product_id AND dv.attribute_id = {$visibilityInfo['id']} AND dv.store_id = 0",
-                array())
-            ->joinLeft(
-                array('sv' => $visibilityInfo['table']),
-                "sv.entity_id = pw.product_id AND sv.attribute_id = {$visibilityInfo['id']} AND sv.store_id = s.store_id",
-                array())
-            ->join(
-                array('ds' => $statusInfo['table']),
-                "ds.entity_id = pw.product_id AND ds.attribute_id = {$statusInfo['id']} AND ds.store_id = 0",
-                array())
-            ->joinLeft(
-                array('ss' => $statusInfo['table']),
-                "ss.entity_id = pw.product_id AND ss.attribute_id = {$statusInfo['id']} AND ss.store_id = s.store_id",
-                array())
-            ->where('i.product_id IS NULL')
-            ->where('IF(ss.value_id IS NOT NULL, ss.value, ds.value)=?', Mage_Catalog_Model_Product_Status::STATUS_ENABLED)
-            ->where('pw.product_id IN(?)', $productIds)
-            ->columns(array(
-                'category_id'   => 'g.root_category_id',
-                'product_id'    => 'pw.product_id',
-                'position'      => $position,
-                'is_parent'     => new Zend_Db_Expr('1'),
-                'store_id'      => 's.store_id',
-                'visibility'    => 'IF(sv.value_id, sv.value, dv.value)'
-            ));
-
-        $sql = $select->insertFromSelect($this->getMainTable());
-        $this->_getWriteAdapter()->query($sql);
-
         return $this;
     }
 
     /**
      * Get is_anchor category attribute information
      *
-     * @return array array('id' => $id, 'table' => $table)
+     * @return array array('id' => $id, 'table'=>$table)
      */
     protected function _getAnchorAttributeInfo()
     {
         $isAnchorAttribute = Mage::getSingleton('eav/config')->getAttribute('catalog_category', 'is_anchor');
         $info = array(
-            'id'    => $isAnchorAttribute->getId(),
+            'id'    => $isAnchorAttribute->getId() ,
             'table' => $isAnchorAttribute->getBackend()->getTable()
         );
         return $info;
@@ -621,13 +422,13 @@ class Mage_Catalog_Model_Resource_Eav_Mysql4_Category_Indexer_Product extends Ma
     /**
      * Get visibility product attribute information
      *
-     * @return array array('id' => $id, 'table' => $table)
+     * @return array array('id' => $id, 'table'=>$table)
      */
     protected function _getVisibilityAttributeInfo()
     {
         $visibilityAttribute = Mage::getSingleton('eav/config')->getAttribute('catalog_product', 'visibility');
         $info = array(
-            'id'    => $visibilityAttribute->getId(),
+            'id'    => $visibilityAttribute->getId() ,
             'table' => $visibilityAttribute->getBackend()->getTable()
         );
         return $info;
@@ -636,13 +437,13 @@ class Mage_Catalog_Model_Resource_Eav_Mysql4_Category_Indexer_Product extends Ma
     /**
      * Get status product attribute information
      *
-     * @return array array('id' => $id, 'table' => $table)
+     * @return array array('id' => $id, 'table'=>$table)
      */
     protected function _getStatusAttributeInfo()
     {
         $statusAttribute = Mage::getSingleton('eav/config')->getAttribute('catalog_product', 'status');
         $info = array(
-            'id'    => $statusAttribute->getId(),
+            'id'    => $statusAttribute->getId() ,
             'table' => $statusAttribute->getBackend()->getTable()
         );
         return $info;
@@ -708,30 +509,23 @@ class Mage_Catalog_Model_Resource_Eav_Mysql4_Category_Indexer_Product extends Ma
             $anchorProductsTable = $this->_getAnchorCategoriesProductsTemporaryTable();
             $idxAdapter->delete($anchorProductsTable);
 
-            $position = new Zend_Db_Expr('IF (ca.category_id=ce.entity_id,
-                cp.position,
-                MIN((ce.position + 1) * (ce.level + 1) * 10000 + cp.position))
-            AS position');
-
             $sql = "SELECT
                     STRAIGHT_JOIN DISTINCT
-                    ca.category_id, cp.product_id, $position
+                    ca.category_id, cp.product_id
                 FROM {$anchorTable} AS ca
                   INNER JOIN {$this->_categoryTable} AS ce
                     ON ce.path LIKE ca.path OR ce.entity_id = ca.category_id
                   INNER JOIN {$this->_categoryProductTable} AS cp
                     ON cp.category_id = ce.entity_id
                   INNER JOIN {$enabledTable} as pv
-                    ON pv.product_id = cp.product_id
-                  GROUP BY ca.category_id, cp.product_id";
-            $this->insertFromSelect($sql, $anchorProductsTable, array('category_id', 'product_id', 'position'));
-
+                    ON pv.product_id = cp.product_id";
+            $this->insertFromSelect($sql, $anchorProductsTable, array('category_id' , 'product_id'));
             /**
              * Add anchor categories products to index
              */
             $sql = "INSERT INTO {$idxTable}
                 SELECT
-                    ap.category_id, ap.product_id, ap.position,
+                    ap.category_id, ap.product_id, cp.position,
                     IF(cp.product_id, 1, 0), {$storeId}, pv.visibility
                 FROM
                     {$anchorProductsTable} AS ap
@@ -740,28 +534,6 @@ class Mage_Catalog_Model_Resource_Eav_Mysql4_Category_Indexer_Product extends Ma
                     INNER JOIN {$enabledTable} as pv
                         ON pv.product_id = ap.product_id";
             $idxAdapter->query($sql);
-
-            $select = $idxAdapter->select()
-                ->from(array('e' => $this->getTable('catalog/product')), null)
-                ->join(
-                    array('ei' => $enabledTable),
-                    'ei.product_id = e.entity_id',
-                    array())
-                ->joinLeft(
-                    array('i' => $idxTable),
-                    'i.product_id = e.entity_id AND i.category_id = :category_id AND i.store_id = :store_id',
-                    array())
-                ->where('i.product_id IS NULL')
-                ->columns(array(
-                    'category_id'   => new Zend_Db_Expr($rootId),
-                    'product_id'    => 'e.entity_id',
-                    'position'      => new Zend_Db_Expr('0'),
-                    'is_parent'     => new Zend_Db_Expr('1'),
-                    'store_id'      => new Zend_Db_Expr($storeId),
-                    'visibility'    => 'ei.visibility'
-                ));
-            $query = $select->insertFromSelect($idxTable);
-            $idxAdapter->query($query, array('store_id' => $storeId, 'category_id' => $rootId));
         }
         $this->syncData();
 
@@ -783,26 +555,18 @@ class Mage_Catalog_Model_Resource_Eav_Mysql4_Category_Indexer_Product extends Ma
      */
     protected function _getStoresInfo()
     {
-        if (is_null($this->_storesInfo)) {
-            $adapter = $this->_getReadAdapter();
-            $select = $adapter->select()
-                ->from(array('s' => $this->getTable('core/store')), array('store_id', 'website_id'))
-                ->join(
-                    array('sg' => $this->getTable('core/store_group')),
-                    'sg.group_id = s.group_id',
-                    array())
-                ->join(
-                    array('c' => $this->getTable('catalog/category')),
-                    'c.entity_id = sg.root_category_id',
-                    array(
-                        'root_path' => 'path',
-                        'root_id'   => 'entity_id'
-                    )
-                );
-            $this->_storesInfo = $adapter->fetchAll($select);
-        }
-
-        return $this->_storesInfo;
+        $stores = $this->_getReadAdapter()->fetchAll("
+            SELECT
+                s.store_id, s.website_id, c.path AS root_path, c.entity_id AS root_id
+            FROM
+                {$this->getTable('core/store')} AS s,
+                {$this->getTable('core/store_group')} AS sg,
+                {$this->getTable('catalog/category')} AS c
+            WHERE
+                sg.group_id=s.group_id
+                AND c.entity_id=sg.root_category_id
+        ");
+        return $stores;
     }
 
     /**
@@ -875,7 +639,7 @@ class Mage_Catalog_Model_Resource_Eav_Mysql4_Category_Indexer_Product extends Ma
 
         $sql = "SELECT
             ce.entity_id AS category_id,
-            CONCAT(ce.path, '/%') AS path
+            concat(ce.path, '/%') AS path
         FROM
             {$this->_categoryTable} as ce
             LEFT JOIN {$anchorTable} AS cad
@@ -885,7 +649,7 @@ class Mage_Catalog_Model_Resource_Eav_Mysql4_Category_Indexer_Product extends Ma
         WHERE
             (IF(cas.value_id>0, cas.value, cad.value) = 1 AND ce.path LIKE '{$rootPath}/%')
             OR ce.path='{$rootPath}'";
-        $this->insertFromSelect($sql, $tmpTable, array('category_id', 'path'));
+        $this->insertFromSelect($sql, $tmpTable, array('category_id' , 'path'));
         return $tmpTable;
     }
 

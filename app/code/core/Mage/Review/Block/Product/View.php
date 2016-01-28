@@ -35,11 +35,6 @@ class Mage_Review_Block_Product_View extends Mage_Catalog_Block_Product_View
 {
     protected $_reviewsCollection;
 
-    /**
-     * Render block HTML
-     *
-     * @return string
-     */
     protected function _toHtml()
     {
         $this->getProduct()->setShortDescription(null);

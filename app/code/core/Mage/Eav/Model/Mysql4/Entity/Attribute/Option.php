@@ -48,26 +48,22 @@ class Mage_Eav_Model_Mysql4_Entity_Attribute_Option extends Mage_Core_Model_Mysq
      * @return Mage_Eav_Model_Mysql4_Entity_Attribute_Option
      */
     public function addOptionValueToCollection($collection, $attribute, $valueExpr) {
-        $adminStore    = Mage_Core_Model_App::ADMIN_STORE_ID;
-        $attributeCode = $attribute->getAttributeCode();
-        $optionTable1  = $attributeCode . '_option_value_t1';
-        $optionTable2  = $attributeCode . '_option_value_t2';
+        $attributeCode  = $attribute->getAttributeCode();
+        $optionTable1   = $attributeCode . '_option_value_t1';
+        $optionTable2   = $attributeCode . '_option_value_t2';
 
-        $collection->getSelect()->joinLeft(
-            array($optionTable1 => $this->getTable('eav/attribute_option_value')),
-            "`{$optionTable1}`.`option_id`={$valueExpr}"
-            . " AND `{$optionTable1}`.`store_id`='{$adminStore}'",
-            ($collection->getStoreId() != $adminStore) ? array() : array($attributeCode.'_value' => "{$optionTable1}.value")
-        );
-
-        if ($collection->getStoreId() != $adminStore) {
-            $collection->getSelect()->joinLeft(
+        $collection->getSelect()
+            ->joinLeft(
+                array($optionTable1 => $this->getTable('eav/attribute_option_value')),
+                "`{$optionTable1}`.`option_id`={$valueExpr}"
+                . " AND `{$optionTable1}`.`store_id`='0'",
+                array())
+            ->joinLeft(
                 array($optionTable2 => $this->getTable('eav/attribute_option_value')),
                 "`{$optionTable2}`.`option_id`={$valueExpr}"
                 . " AND `{$optionTable1}`.`store_id`='{$collection->getStoreId()}'",
-                array($attributeCode.'_value' => "IFNULL(`{$optionTable2}`.`value`, `{$optionTable1}`.`value`)")
+                array($attributeCode => "IFNULL(`{$optionTable2}`.`value`, `{$optionTable1}`.`value`)")
             );
-        }
 
         return $this;
     }
@@ -85,11 +81,7 @@ class Mage_Eav_Model_Mysql4_Entity_Attribute_Option extends Mage_Core_Model_Mysq
         $attributeTable = $attribute->getBackend()->getTable();
         $attributeCode  = $attribute->getAttributeCode();
 
-        $joinConditionTemplate = "`e`.`entity_id`=`%s`.`entity_id`"
-            ." AND `%s`.`entity_type_id` = ".$attribute->getEntityTypeId()
-            ." AND `%s`.`attribute_id` = ".$attribute->getId()
-            ." AND `%s`.`store_id` = %d";
-        $joinCondition = sprintf($joinConditionTemplate, 't1', 't1', 't1', 't1', Mage_Core_Model_App::ADMIN_STORE_ID);
+        $joinCondition = "`e`.`entity_id`=`t1`.`entity_id`";
         if ($attribute->getFlatAddChildData()) {
             $joinCondition .= " AND `e`.`child_id`=`t1`.`entity_id`";
         }
@@ -103,7 +95,10 @@ class Mage_Eav_Model_Mysql4_Entity_Attribute_Option extends Mage_Core_Model_Mysq
                 )
             ->joinLeft(
                 array('t2' => $attributeTable),
-                sprintf($joinConditionTemplate, 't2', 't2', 't2', 't2', $store),
+                "`t2`.`entity_id`=`t1`.`entity_id`"
+                    . " AND `t1`.`entity_type_id`=`t2`.`entity_type_id`"
+                    . " AND `t1`.`attribute_id`=`t2`.`attribute_id`"
+                    . " AND `t2`.`store_id`={$store}",
                 array($attributeCode => $valueExpr));
         if (($attribute->getFrontend()->getInputType() != 'multiselect') && $hasValueField) {
             $select->joinLeft(
@@ -118,6 +113,10 @@ class Mage_Eav_Model_Mysql4_Entity_Attribute_Option extends Mage_Core_Model_Mysq
                 array($attributeCode . '_value' => "IFNULL(`to2`.`value`, `to1`.`value`)")
             );
         }
+        $select
+            ->where('t1.entity_type_id=?', $attribute->getEntityTypeId())
+            ->where('t1.attribute_id=?', $attribute->getId())
+            ->where('t1.store_id=?', 0);
 
         if ($attribute->getFlatAddChildData()) {
             $select->where("e.is_child=?", 0);

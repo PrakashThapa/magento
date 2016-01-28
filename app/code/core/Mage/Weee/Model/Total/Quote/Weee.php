@@ -36,13 +36,6 @@ class Mage_Weee_Model_Total_Quote_Weee extends Mage_Tax_Model_Sales_Total_Quote_
     protected $_store;
 
     /**
-     * Tax configuration object
-     *
-     * @var Mage_Tax_Model_Config
-     */
-    protected $_config;
-
-    /**
      * Flag which notify what tax amount can be affected by fixed porduct tax
      *
      * @var bool
@@ -56,7 +49,6 @@ class Mage_Weee_Model_Total_Quote_Weee extends Mage_Tax_Model_Sales_Total_Quote_
     {
         $this->setCode('weee');
         $this->_helper = Mage::helper('weee');
-        $this->_config = Mage::getSingleton('tax/config');
     }
 
     /**
@@ -223,13 +215,11 @@ class Mage_Weee_Model_Total_Quote_Weee extends Mage_Tax_Model_Sales_Total_Quote_
     protected function _processTaxSettings($item, $value, $baseValue, $rowValue, $baseRowValue)
     {
         if ($this->_helper->isTaxable($this->_store) && $rowValue) {
-            if ($this->_config->priceIncludesTax($this->_store)) {
-                $item->setExtraTaxableAmount($value)
-                    ->setBaseExtraTaxableAmount($baseValue)
-                    ->setExtraRowTaxableAmount($rowValue)
-                    ->setBaseExtraRowTaxableAmount($baseRowValue);
-            }
-            $item->unsRowTotalInclTax()
+            $item->setExtraTaxableAmount($value)
+                ->setBaseExtraTaxableAmount($baseValue)
+                ->setExtraRowTaxableAmount($rowValue)
+                ->setBaseExtraRowTaxableAmount($baseRowValue)
+                ->unsRowTotalInclTax()
                 ->unsBaseRowTotalInclTax()
                 ->unsPriceInclTax()
                 ->unsBasePriceInclTax();

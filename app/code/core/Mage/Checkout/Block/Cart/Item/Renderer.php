@@ -33,8 +33,6 @@
  */
 class Mage_Checkout_Block_Cart_Item_Renderer extends Mage_Core_Block_Template
 {
-    /** @var Mage_Checkout_Model_Session */
-    protected $_checkoutSession;
     protected $_item;
     protected $_productUrl = null;
     protected $_productThumbnail = null;
@@ -168,9 +166,33 @@ class Mage_Checkout_Block_Cart_Item_Renderer extends Mage_Core_Block_Template
      */
     public function getProductOptions()
     {
-        /* @var $helper Mage_Catalog_Helper_Product_Configuration */
-        $helper = Mage::helper('catalog/product_configuration');
-        return $helper->getCustomOptions($this->getItem());
+        $options = array();
+        if ($optionIds = $this->getItem()->getOptionByCode('option_ids')) {
+            $options = array();
+            foreach (explode(',', $optionIds->getValue()) as $optionId) {
+                if ($option = $this->getProduct()->getOptionById($optionId)) {
+
+                    $quoteItemOption = $this->getItem()->getOptionByCode('option_' . $option->getId());
+
+                    $group = $option->groupFactory($option->getType())
+                        ->setOption($option)
+                        ->setQuoteItemOption($quoteItemOption);
+
+                    $options[] = array(
+                        'label' => $option->getTitle(),
+                        'value' => $group->getFormattedOptionValue($quoteItemOption->getValue()),
+                        'print_value' => $group->getPrintableOptionValue($quoteItemOption->getValue()),
+                        'option_id' => $option->getId(),
+                        'option_type' => $option->getType(),
+                        'custom_view' => $group->isCustomizedView()
+                    );
+                }
+            }
+        }
+        if ($addOptions = $this->getItem()->getOptionByCode('additional_options')) {
+            $options = array_merge($options, unserialize($addOptions->getValue()));
+        }
+        return $options;
     }
 
     /**
@@ -181,19 +203,6 @@ class Mage_Checkout_Block_Cart_Item_Renderer extends Mage_Core_Block_Template
     public function getOptionList()
     {
         return $this->getProductOptions();
-    }
-
-    /**
-     * Get item configure url
-     *
-     * @return string
-     */
-    public function getConfigureUrl()
-    {
-        return $this->getUrl(
-            'checkout/cart/configure',
-            array('id' => $this->getItem()->getId())
-        );
     }
 
     /**
@@ -225,13 +234,12 @@ class Mage_Checkout_Block_Cart_Item_Renderer extends Mage_Core_Block_Template
     /**
      * Check item is in stock
      *
-     * @deprecated after 1.4.2.0-beta1
      * @return bool
      */
     public function getIsInStock()
     {
         if ($this->getItem()->getProduct()->isSaleable()) {
-            if ($this->getItem()->getProduct()->getStockItem()->getQty() >= $this->getItem()->getQty()) {
+            if ($this->getItem()->getProduct()->getQty()>=$this->getItem()->getQty()) {
                 return true;
             }
         }
@@ -239,61 +247,26 @@ class Mage_Checkout_Block_Cart_Item_Renderer extends Mage_Core_Block_Template
     }
 
     /**
-     * Get checkout session
-     *
-     * @return Mage_Checkout_Model_Session
-     */
-    public function getCheckoutSession()
-    {
-        if (null === $this->_checkoutSession) {
-            $this->_checkoutSession = Mage::getSingleton('checkout/session');
-        }
-        return $this->_checkoutSession;
-    }
-
-    /**
      * Retrieve item messages
      * Return array with keys
      *
-     * text => the message text
-     * type => type of a message
+     * type     => type of a message
+     * text     => the message text
      *
      * @return array
      */
     public function getMessages()
     {
         $messages = array();
-        $quoteItem = $this->getItem();
-
-        // Add basic messages occuring during this page load
-        $baseMessages = $quoteItem->getMessage(false);
-        if ($baseMessages) {
-            foreach ($baseMessages as $message) {
+        if ($this->getItem()->getMessage(false)) {
+            foreach ($this->getItem()->getMessage(false) as $message) {
                 $messages[] = array(
-                    'text' => $message,
-                    'type' => $quoteItem->getHasError() ? 'error' : 'notice'
+                    'text'  => $message,
+                    'type'  => $this->getItem()->getHasError() ? 'error' : 'notice'
                 );
             }
         }
-
-        // Add messages saved previously in checkout session
-        $checkoutSession = $this->getCheckoutSession();
-        if ($checkoutSession) {
-            /* @var $collection Mage_Core_Model_Message_Collection */
-            $collection = $checkoutSession->getQuoteItemMessages($quoteItem->getId(), true);
-            if ($collection) {
-                $additionalMessages = $collection->getItems();
-                foreach ($additionalMessages as $message) {
-                    /* @var $message Mage_Core_Model_Message_Abstract */
-                    $messages[] = array(
-                        'text' => $message->getCode(),
-                        'type' => ($message->getType() == Mage_Core_Model_Message::ERROR) ? 'error' : 'notice'
-                    );
-                }
-            }
-        }
-
-        return $messages;
+        return array_unique($messages);
     }
 
     /**
@@ -318,13 +291,54 @@ class Mage_Checkout_Block_Cart_Item_Renderer extends Mage_Core_Block_Template
      */
     public function getFormatedOptionValue($optionValue)
     {
-        /* @var $helper Mage_Catalog_Helper_Product_Configuration */
-        $helper = Mage::helper('catalog/product_configuration');
-        $params = array(
-            'max_length' => 55,
-            'cut_replacer' => ' <a href="#" class="dots" onclick="return false">...</a>'
-        );
-        return $helper->getFormattedOptionValue($optionValue, $params);
+        $optionInfo = array();
+
+        // define input data format
+        if (is_array($optionValue)) {
+            if (isset($optionValue['option_id'])) {
+                $optionInfo = $optionValue;
+                if (isset($optionInfo['value'])) {
+                    $optionValue = $optionInfo['value'];
+                }
+            } elseif (isset($optionValue['value'])) {
+                $optionValue = $optionValue['value'];
+            }
+        }
+
+        // render customized option view
+        if (isset($optionInfo['custom_view']) && $optionInfo['custom_view']) {
+            $_default = array('value' => $optionValue);
+            if (isset($optionInfo['option_type'])) {
+                try {
+                    $group = Mage::getModel('catalog/product_option')->groupFactory($optionInfo['option_type']);
+                    return array('value' => $group->getCustomizedView($optionInfo));
+                } catch (Exception $e) {
+                    return $_default;
+                }
+            }
+            return $_default;
+        }
+
+        // truncate standard view
+        $result = array();
+        if (is_array($optionValue)) {
+            $_truncatedValue = implode("\n", $optionValue);
+            $_truncatedValue = nl2br($_truncatedValue);
+            return array('value' => $_truncatedValue);
+        } else {
+            $_truncatedValue = Mage::helper('core/string')->truncate($optionValue, 55, '');
+            $_truncatedValue = nl2br($_truncatedValue);
+        }
+
+        $result = array('value' => $_truncatedValue);
+
+        if (Mage::helper('core/string')->strlen($optionValue) > 55) {
+            $result['value'] = $result['value'] . ' <a href="#" class="dots" onclick="return false">...</a>';
+            $optionValue = nl2br($optionValue);
+            $result = array_merge($result, array('full_view' => $optionValue));
+        }
+
+        return $result;
     }
 
     /**
@@ -335,15 +349,5 @@ class Mage_Checkout_Block_Cart_Item_Renderer extends Mage_Core_Block_Template
     public function isProductVisible()
     {
         return $this->getProduct()->isVisibleInSiteVisibility();
-    }
-
-    /**
-     * Return product additional information block
-     *
-     * @return Mage_Core_Block_Abstract
-     */
-    public function getProductAdditionalInformationBlock()
-    {
-        return $this->getLayout()->getBlock('additional.product.info');
     }
 }

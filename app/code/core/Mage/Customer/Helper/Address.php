@@ -31,27 +31,9 @@
  */
 class Mage_Customer_Helper_Address extends Mage_Core_Helper_Abstract
 {
-    /**
-     * Array of Customer Address Attributes
-     *
-     * @var array
-     */
-    protected $_attributes;
-
-    /**
-     * Customer address config node per website
-     *
-     * @var array
-     */
-    protected $_config          = array();
-
-    /**
-     * Customer Number of Lines in a Street Address per website
-     *
-     * @var array
-     */
-    protected $_streetLines     = array();
-    protected $_formatTemplate  = array();
+    protected $_config;
+    protected $_streetLines;
+    protected $_formatTemplate = array();
 
     /**
      * Addresses url
@@ -85,39 +67,21 @@ class Mage_Customer_Helper_Address extends Mage_Core_Helper_Abstract
         }
     }
 
-    /**
-     * Return customer address config value by key and store
-     *
-     * @param string $key
-     * @param Mage_Core_Model_Store|int|string $store
-     * @return string|null
-     */
-    public function getConfig($key, $store = null)
+    public function getConfig($key, $store=null)
     {
-        $websiteId = Mage::app()->getStore($store)->getWebsiteId();
-
-        if (!isset($this->_config[$websiteId])) {
-            $this->_config[$websiteId] = Mage::getStoreConfig('customer/address', $store);
+        if (is_null($this->_config)) {
+            $this->_config = Mage::getStoreConfig('customer/address');
         }
-        return isset($this->_config[$websiteId][$key]) ? (string)$this->_config[$websiteId][$key] : null;
+        return isset($this->_config[$key]) ? $this->_config[$key] : null;
     }
 
-    /**
-     * Return Number of Lines in a Street Address for store
-     *
-     * @param Mage_Core_Model_Store|int|string $store
-     * @return int
-     */
-    public function getStreetLines($store = null)
+    public function getStreetLines($store=null)
     {
-        $websiteId = Mage::app()->getStore($store)->getWebsiteId();
-        if (!isset($this->_streetLines[$websiteId])) {
-            $attribute = Mage::getSingleton('eav/config')->getAttribute('customer_address', 'street');
-            $lines = $attribute->getMultilineCount();
-            $this->_streetLines[$websiteId] = min(4, max(1, (int)$lines));
+        if (is_null($this->_streetLines)) {
+            $lines = $this->getConfig('street_lines', $store);
+            $this->_streetLines = min(4, max(1, (int)$lines));
         }
-
-        return $this->_streetLines[$websiteId];
+        return $this->_streetLines;
     }
 
     public function getFormat($code)
@@ -138,63 +102,5 @@ class Mage_Customer_Helper_Address extends Mage_Core_Helper_Abstract
             return false;
         }
         return true;
-    }
-
-    /**
-     * Return array of Customer Address Attributes
-     *
-     * @return array
-     */
-    public function getAttributes()
-    {
-        if (is_null($this->_attributes)) {
-            $this->_attributes = array();
-            /* @var $config Mage_Eav_Model_Config */
-            $config = Mage::getSingleton('eav/config');
-            foreach ($config->getEntityAttributeCodes('customer_address') as $attributeCode) {
-                $this->_attributes[$attributeCode] = $config->getAttribute('customer_address', $attributeCode);
-            }
-        }
-        return $this->_attributes;
-    }
-
-    /**
-     * Convert streets array to new street lines count
-     * Examples of use:
-     *  $origStreets = array('street1', 'street2', 'street3', 'street4')
-     *  $toCount = 3
-     *  Result:
-     *   array('street1 street2', 'street3', 'street4')
-     *  $toCount = 2
-     *  Result:
-     *   array('street1 street2', 'street3 street4')
-     *
-     * @param array $origStreets
-     * @param int   $toCount
-     * @return array
-     */
-    public function convertStreetLines($origStreets, $toCount)
-    {
-        $lines = array();
-        if (!empty($origStreets) && $toCount > 0) {
-            $countArgs = (int)floor(count($origStreets)/$toCount);
-            $modulo = count($origStreets) % $toCount;
-            $offset = 0;
-            $neededLinesCount = 0;
-            for ($i = 0; $i < $toCount; $i++) {
-                $offset += $neededLinesCount;
-                $neededLinesCount = $countArgs;
-                if ($modulo > 0) {
-                    ++$neededLinesCount;
-                    --$modulo;
-                }
-                $values = array_slice($origStreets, $offset, $neededLinesCount);
-                if (is_array($values)) {
-                    $lines[] = implode(' ', $values);
-                }
-            }
-        }
-
-        return $lines;
     }
 }

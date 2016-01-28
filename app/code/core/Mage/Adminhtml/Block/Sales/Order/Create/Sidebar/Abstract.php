@@ -33,11 +33,6 @@
  */
 class Mage_Adminhtml_Block_Sales_Order_Create_Sidebar_Abstract extends Mage_Adminhtml_Block_Sales_Order_Create_Abstract
 {
-    /**
-     * Default Storage action on selected item
-     *
-     * @var string
-     */
     protected $_sidebarStorageAction = 'add';
 
     /**
@@ -98,17 +93,6 @@ class Mage_Adminhtml_Block_Sales_Order_Create_Sidebar_Abstract extends Mage_Admi
     }
 
     /**
-     * Retrieve product identifier linked with item
-     *
-     * @param   mixed $item
-     * @return  int
-     */
-    public function getProductId($item)
-    {
-        return $item->getId();
-    }
-
-    /**
      * Retreive item count
      *
      * @return int
@@ -130,20 +114,18 @@ class Mage_Adminhtml_Block_Sales_Order_Create_Sidebar_Abstract extends Mage_Admi
      */
     public function getItems()
     {
-        $items = array();
-        $collection = $this->getItemCollection();
-        if ($collection) {
+        if ($collection = $this->getItemCollection()) {
             $productTypes = Mage::getConfig()->getNode('adminhtml/sales/order/create/available_product_types')->asArray();
+            $productTypes = array_keys($productTypes);
             if (is_array($collection)) {
                 $items = $collection;
             } else {
                 $items = $collection->getItems();
             }
-
             /*
-             * Filtering items by allowed product type
+             * filtering items by product type
              */
-            foreach($items as $key => $item) {
+            foreach($items as $key=>$item) {
                 if ($item instanceof Mage_Catalog_Model_Product) {
                     $type = $item->getTypeId();
                 } else if ($item instanceof Mage_Sales_Model_Order_Item) {
@@ -152,21 +134,14 @@ class Mage_Adminhtml_Block_Sales_Order_Create_Sidebar_Abstract extends Mage_Admi
                     $type = $item->getProductType();
                 } else {
                     $type = '';
-                    // Maybe some item, that can give us product via getProduct()
-                    if (($item instanceof Varien_Object) || method_exists($item, 'getProduct')) {
-                        $product = $item->getProduct();
-                        if ($product && ($product instanceof Mage_Catalog_Model_Product)) {
-                            $type = $product->getTypeId();
-                        }
-                    }
                 }
-                if (!isset($productTypes[$type])) {
+                if (!in_array($type, $productTypes)) {
                     unset($items[$key]);
                 }
             }
+            return $items;
         }
-
-        return $items;
+        return array();
     }
 
     /**

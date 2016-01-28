@@ -28,7 +28,7 @@
 /**
  * USPS shipping rates estimation
  *
- * @link       http://www.usps.com/webtools/htm/Development-Guide-v3-0b.htm
+ * @link       http://www.usps.com/webtools/htm/Development-Guide.htm
  * @category   Mage
  * @package    Mage_Usa
  * @author      Magento Core Team <core@magentocommerce.com>
@@ -37,12 +37,6 @@ class Mage_Usa_Model_Shipping_Carrier_Usps
     extends Mage_Usa_Model_Shipping_Carrier_Abstract
     implements Mage_Shipping_Model_Carrier_Interface
 {
-    /**
-     * Destination Zip Code required flag
-     *
-     * @var boolean
-     */
-    protected $_isZipCodeRequired;
 
     protected $_code = 'usps';
 
@@ -51,34 +45,6 @@ class Mage_Usa_Model_Shipping_Carrier_Usps
     protected $_result = null;
 
     protected $_defaultGatewayUrl = 'http://production.shippingapis.com/ShippingAPI.dll';
-
-    /**
-     * Check is Zip Code Required
-     *
-     * @return boolean
-     */
-    public function isZipCodeRequired()
-    {
-        if (!is_null($this->_isZipCodeRequired)) {
-            return $this->_isZipCodeRequired;
-        }
-
-        return parent::isZipCodeRequired();
-    }
-
-    /**
-     * Processing additional validation to check is carrier applicable.
-     *
-     * @param Mage_Shipping_Model_Rate_Request $request
-     * @return Mage_Shipping_Model_Carrier_Abstract|Mage_Shipping_Model_Rate_Result_Error|boolean
-     */
-    public function proccessAdditionalValidation(Mage_Shipping_Model_Rate_Request $request)
-    {
-        // zip code required for US
-        $this->_isZipCodeRequired = $this->_isUSCountry($request->getDestCountryId());
-
-        return parent::proccessAdditionalValidation($request);
-    }
 
     public function collectRates(Mage_Shipping_Model_Rate_Request $request)
     {
@@ -149,9 +115,20 @@ class Mage_Usa_Model_Shipping_Carrier_Usps
 
         $r->setDestCountryId($destCountry);
 
-        if (!$this->_isUSCountry($destCountry)) {
-            $r->setDestCountryName($this->_getCountryName($destCountry));
+        /*
+        for GB, we cannot use United Kingdom
+        */
+        if ($destCountry=='GB') {
+           $countryName = 'Great Britain and Northern Ireland';
+        } else {
+             $countries = Mage::getResourceModel('directory/country_collection')
+                            ->addCountryIdFilter($destCountry)
+                            ->load()
+                            ->getItems();
+            $country = array_shift($countries);
+            $countryName = $country->getName();
         }
+        $r->setDestCountryName($countryName);
 
         if ($request->getDestPostcode()) {
             $r->setDestPostal($request->getDestPostcode());
@@ -159,7 +136,7 @@ class Mage_Usa_Model_Shipping_Carrier_Usps
 
         $weight = $this->getTotalNumOfBoxes($request->getPackageWeight());
         $r->setWeightPounds(floor($weight));
-        $r->setWeightOunces(round(($weight-floor($weight)) * 16, 1));
+        $r->setWeightOunces(round(($weight-floor($weight))*16, 1));
         if ($request->getFreeMethodWeight()!=$request->getPackageWeight()) {
             $r->setFreeMethodWeight($request->getFreeMethodWeight());
         }
@@ -188,23 +165,18 @@ class Mage_Usa_Model_Shipping_Carrier_Usps
 
         $weight = $this->getTotalNumOfBoxes($r->getFreeMethodWeight());
         $r->setWeightPounds(floor($weight));
-        $r->setWeightOunces(round(($weight-floor($weight)) * 16, 1));
+        $r->setWeightOunces(round(($weight-floor($weight))*16, 1));
         $r->setService($freeMethod);
     }
 
-    /**
-     * Build RateV3 request, send it to USPS gateway and retrieve quotes in XML format
-     *
-     * @link http://www.usps.com/webtools/htm/Rate-Calculators-v2-3.htm
-     * @return Mage_Shipping_Model_Rate_Result
-     */
     protected function _getXmlQuotes()
     {
         $r = $this->_rawRequest;
-        if ($this->_isUSCountry($r->getDestCountryId())) {
+        if ($r->getDestCountryId() == self::USA_COUNTRY_ID || $r->getDestCountryId() == self::PUERTORICO_COUNTRY_ID) {
             $xml = new SimpleXMLElement('<?xml version = "1.0" encoding = "UTF-8"?><RateV3Request/>');
 
             $xml->addAttribute('USERID', $r->getUserId());
+
             $package = $xml->addChild('Package');
                 $package->addAttribute('ID', 0);
                 $service = $this->getCode('service_to_code', $r->getService());
@@ -253,96 +225,108 @@ class Mage_Usa_Model_Shipping_Carrier_Usps
             $request = $xml->asXML();
         }
 
-        $responseBody = $this->_getCachedQuotes($request);
-        if ($responseBody === null) {
-            $debugData = array('request' => $request);
-            try {
-                $url = $this->getConfigData('gateway_url');
-                if (!$url) {
-                    $url = $this->_defaultGatewayUrl;
-                }
-                $client = new Zend_Http_Client();
-                $client->setUri($url);
-                $client->setConfig(array('maxredirects'=>0, 'timeout'=>30));
-                $client->setParameterGet('API', $api);
-                $client->setParameterGet('XML', $request);
-                $response = $client->request();
-                $responseBody = $response->getBody();
+        $debugData = array('request' => $request);
 
-                $debugData['result'] = $responseBody;
-                $this->_setCachedQuotes($request, $responseBody);
+        try {
+            $url = $this->getConfigData('gateway_url');
+            if (!$url) {
+                $url = $this->_defaultGatewayUrl;
             }
-            catch (Exception $e) {
-                $debugData['result'] = array('error' => $e->getMessage(), 'code' => $e->getCode());
-                $responseBody = '';
-            }
-            $this->_debug($debugData);
+            $client = new Zend_Http_Client();
+            $client->setUri($url);
+            $client->setConfig(array('maxredirects'=>0, 'timeout'=>30));
+            $client->setParameterGet('API', $api);
+            $client->setParameterGet('XML', $request);
+            $response = $client->request();
+            $responseBody = $response->getBody();
+            $debugData['result'] = $responseBody;
         }
-        return $this->_parseXmlResponse($responseBody);
+        catch (Exception $e) {
+            $debugData['result'] = array('error' => $e->getMessage(), 'code' => $e->getCode());
+            $responseBody = '';
+        }
+
+        $this->_debug($debugData);
+        return $this->_parseXmlResponse($responseBody);;
     }
 
-    /**
-     * Parse calculated rates
-     *
-     * @link http://www.usps.com/webtools/htm/Rate-Calculators-v2-3.htm
-     * @param string $response
-     * @return Mage_Shipping_Model_Rate_Result
-     */
     protected function _parseXmlResponse($response)
     {
         $costArr = array();
         $priceArr = array();
-        if (strlen(trim($response)) > 0) {
-            if (strpos(trim($response), '<?xml') === 0) {
+        $errorTitle = 'Unable to retrieve quotes';
+        if (strlen(trim($response))>0) {
+            if (strpos(trim($response), '<?xml')===0) {
                 if (preg_match('#<\?xml version="1.0"\?>#', $response)) {
                     $response = str_replace('<?xml version="1.0"?>', '<?xml version="1.0" encoding="ISO-8859-1"?>', $response);
                 }
 
                 $xml = simplexml_load_string($response);
-                if (is_object($xml)) {
-                    $r = $this->_rawRequest;
-                    $allowedMethods = explode(",", $this->getConfigData('allowed_methods'));
-
-                    /*
-                     * US Domestic Rates
-                     */
-                    if ($this->_isUSCountry($r->getDestCountryId())) {
-                        if (is_object($xml->Package) && is_object($xml->Package->Postage)) {
-                            foreach ($xml->Package->Postage as $postage) {
-                                $serviceName = $this->_filterServiceName((string)$postage->MailService);
-                                $postage->MailService = $serviceName;
-                                if (in_array($serviceName, $allowedMethods)) {
-                                    $costArr[$serviceName] = (string)$postage->Rate;
-                                    $priceArr[$serviceName] = $this->getMethodPrice((string)$postage->Rate, $serviceName);
-                                }
-                            }
-                            asort($priceArr);
+                    if (is_object($xml)) {
+                        if (is_object($xml->Number) && is_object($xml->Description) && (string)$xml->Description!='') {
+                            $errorTitle = (string)$xml->Description;
+                        } elseif (is_object($xml->Package) && is_object($xml->Package->Error) && is_object($xml->Package->Error->Description) && (string)$xml->Package->Error->Description!='') {
+                            $errorTitle = (string)$xml->Package->Error->Description;
+                        } else {
+                            $errorTitle = 'Unknown error';
                         }
-                    } else {
-                        /*
-                         * International Rates
-                         */
-                        if (is_object($xml->Package) && is_object($xml->Package->Service)) {
-                            foreach ($xml->Package->Service as $service) {
-                                $serviceName = $this->_filterServiceName((string)$service->SvcDescription);
-                                $service->SvcDescription = $serviceName;
-                                if (in_array($serviceName, $allowedMethods)) {
-                                    $costArr[$serviceName] = (string)$service->Postage;
-                                    $priceArr[$serviceName] = $this->getMethodPrice((string)$service->Postage, $serviceName);
+                        $r = $this->_rawRequest;
+                        $allowedMethods = explode(",", $this->getConfigData('allowed_methods'));
+                        $allMethods = $this->getCode('method');
+                        $newMethod = false;
+                        if ($r->getDestCountryId() == self::USA_COUNTRY_ID || $r->getDestCountryId() == self::PUERTORICO_COUNTRY_ID) {
+                            if (is_object($xml->Package) && is_object($xml->Package->Postage)) {
+                                foreach ($xml->Package->Postage as $postage) {
+//                                    if (in_array($this->getCode('service_to_code', (string)$postage->MailService), $allowedMethods) && $this->getCode('service', $this->getCode('service_to_code', (string)$postage->MailService))) {
+                                    if (in_array((string)$postage->MailService, $allowedMethods)) {
+                                        $costArr[(string)$postage->MailService] = (string)$postage->Rate;
+//                                        $priceArr[(string)$postage->MailService] = $this->getMethodPrice((string)$postage->Rate, $this->getCode('service_to_code', (string)$postage->MailService));
+                                        $priceArr[(string)$postage->MailService] = $this->getMethodPrice((string)$postage->Rate, (string)$postage->MailService);
+                                    } elseif (!in_array((string)$postage->MailService, $allMethods)) {
+                                        $allMethods[] = (string)$postage->MailService;
+                                        $newMethod = true;
+                                    }
                                 }
+                                asort($priceArr);
                             }
-                            asort($priceArr);
+                        } else {
+                            if (is_object($xml->Package) && is_object($xml->Package->Service)) {
+                                foreach ($xml->Package->Service as $service) {
+//                                    if (in_array($this->getCode('service_to_code', (string)$service->SvcDescription), $allowedMethods) && $this->getCode('service', $this->getCode('service_to_code', (string)$service->SvcDescription))) {
+                                    if (in_array((string)$service->SvcDescription, $allowedMethods)) {
+                                        $costArr[(string)$service->SvcDescription] = (string)$service->Postage;
+//                                        $priceArr[(string)$service->SvcDescription] = $this->getMethodPrice((string)$service->Postage, $this->getCode('service_to_code', (string)$service->SvcDescription));
+                                        $priceArr[(string)$service->SvcDescription] = $this->getMethodPrice((string)$service->Postage, (string)$service->SvcDescription);
+                                    } elseif (!in_array((string)$service->SvcDescription, $allMethods)) {
+                                        $allMethods[] = (string)$service->SvcDescription;
+                                        $newMethod = true;
+                                    }
+                                }
+                                asort($priceArr);
+                            }
+                        }
+                        /*
+                        * following if statement is obsolete
+                        * we don't have adminhtml/config resoure model
+                        */
+                        if (false && $newMethod) {
+                            sort($allMethods);
+                            $insert['usps']['fields']['methods']['value'] = $allMethods;
+                            Mage::getResourceModel('adminhtml/config')->saveSectionPost('carriers','','',$insert);
                         }
                     }
-                }
+            } else {
+                $errorTitle = 'Response is in the wrong format';
             }
         }
 
         $result = Mage::getModel('shipping/rate_result');
+        $defaults = $this->getDefaults();
         if (empty($priceArr)) {
             $error = Mage::getModel('shipping/rate_result_error');
             $error->setCarrier('usps');
             $error->setCarrierTitle($this->getConfigData('title'));
+            //$error->setErrorMessage($errorTitle);
             $error->setErrorMessage($this->getConfigData('specificerrmsg'));
             $result->append($error);
         } else {
@@ -357,7 +341,6 @@ class Mage_Usa_Model_Shipping_Carrier_Usps
                 $result->append($rate);
             }
         }
-        
         return $result;
     }
 
@@ -402,15 +385,13 @@ class Mage_Usa_Model_Shipping_Carrier_Usps
             'service_to_code'=>array(
                 'First-Class'                                   => 'FIRST CLASS',
                 'First-Class Mail International Large Envelope' => 'FIRST CLASS',
-                'First-Class Mail International Letter'         => 'FIRST CLASS',
+                'First-Class Mail International Letters'        => 'FIRST CLASS',
                 'First-Class Mail International Package'        => 'FIRST CLASS',
                 'First-Class Mail'                 => 'FIRST CLASS',
                 'First-Class Mail Flat'            => 'FIRST CLASS',
-                'First-Class Mail Large Envelope'  => 'FIRST CLASS',
                 'First-Class Mail International'   => 'FIRST CLASS',
                 'First-Class Mail Letter'          => 'FIRST CLASS',
                 'First-Class Mail Parcel'          => 'FIRST CLASS',
-                'First-Class Mail Package'         => 'FIRST CLASS',
                 'Parcel Post'                      => 'PARCEL',
                 'Bound Printed Matter'             => 'BPM',
                 'Media Mail'                       => 'MEDIA',
@@ -473,12 +454,14 @@ class Mage_Usa_Model_Shipping_Carrier_Usps
         }
 
         if (!isset($codes[$type])) {
+//            throw Mage::exception('Mage_Shipping', Mage::helper('usa')->__('Invalid USPS XML code type: %s', $type));
             return false;
         } elseif (''===$code) {
             return $codes[$type];
         }
 
         if (!isset($codes[$type][$code])) {
+//            throw Mage::exception('Mage_Shipping', Mage::helper('usa')->__('Invalid USPS XML code for type %s: %s', $type, $code));
             return false;
         } else {
             return $codes[$type][$code];
@@ -513,7 +496,7 @@ class Mage_Usa_Model_Shipping_Carrier_Usps
     {
          $r = $this->_rawTrackRequest;
 
-         foreach ($trackings as $tracking) {
+         foreach ($trackings as $tracking){
              $xml = new SimpleXMLElement('<?xml version = "1.0" encoding = "UTF-8"?><TrackRequest/>');
              $xml->addAttribute('USERID', $r->getUserId());
 
@@ -551,9 +534,9 @@ class Mage_Usa_Model_Shipping_Carrier_Usps
 
     protected function _parseXmlTrackingResponse($trackingvalue, $response)
     {
-        $errorTitle = Mage::helper('usa')->__('Unable to retrieve tracking');
+        $errorTitle = 'Unable to retrieve tracking';
         $resultArr=array();
-        if (strlen(trim($response)) > 0) {
+        if (strlen(trim($response))>0) {
             if (strpos(trim($response), '<?xml')===0) {
                 $xml = simplexml_load_string($response);
                 if (is_object($xml)) {
@@ -562,7 +545,7 @@ class Mage_Usa_Model_Shipping_Carrier_Usps
                     } elseif (isset($xml->TrackInfo) && isset($xml->TrackInfo->Error) && isset($xml->TrackInfo->Error->Description) && (string)$xml->TrackInfo->Error->Description!='') {
                         $errorTitle = (string)$xml->TrackInfo->Error->Description;
                     } else {
-                        $errorTitle = Mage::helper('usa')->__('Unknown error');
+                        $errorTitle = 'Unknown error';
                     }
 
                     if(isset($xml->TrackInfo) && isset($xml->TrackInfo->TrackSummary)){
@@ -573,7 +556,7 @@ class Mage_Usa_Model_Shipping_Carrier_Usps
             }
         }
 
-        if (!$this->_result) {
+        if(!$this->_result){
             $this->_result = Mage::getModel('shipping/tracking_result');
         }
         $defaults = $this->getDefaults();
@@ -598,10 +581,10 @@ class Mage_Usa_Model_Shipping_Carrier_Usps
     public function getResponse()
     {
         $statuses = '';
-        if ($this->_result instanceof Mage_Shipping_Model_Tracking_Result) {
+        if ($this->_result instanceof Mage_Shipping_Model_Tracking_Result){
             if ($trackings = $this->_result->getAllTrackings()) {
-                foreach ($trackings as $tracking) {
-                    if($data = $tracking->getAllData()) {
+                foreach ($trackings as $tracking){
+                    if($data = $tracking->getAllData()){
                         if (!empty($data['track_summary'])) {
                             $statuses .= Mage::helper('usa')->__($data['track_summary']);
                         } else {
@@ -632,279 +615,4 @@ class Mage_Usa_Model_Shipping_Carrier_Usps
         return $arr;
     }
 
-    /**
-     * Check is Сoutry U.S. Possessions and Trust Territories
-     *
-     * @param string $countyId
-     * @return boolean
-     */
-    protected function _isUSCountry($countyId)
-    {
-        switch ($countyId) {
-            case 'AS': // Samoa American
-            case 'GU': // Guam
-            case 'MP': // Northern Mariana Islands
-            case 'PW': // Palau
-            case 'PR': // Puerto Rico
-            case 'VI': // Virgin Islands US
-            case 'US'; // United States
-                return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Return USPS county name by country ISO 3166-1-alpha-2 code
-     * Return false for unknown countries
-     *
-     * @param string $countryId
-     * @return string|false
-     */
-    protected function _getCountryName($countryId)
-    {
-        $countries = array (
-          'AD' => 'Andorra',
-          'AE' => 'United Arab Emirates',
-          'AF' => 'Afghanistan',
-          'AG' => 'Antigua and Barbuda',
-          'AI' => 'Anguilla',
-          'AL' => 'Albania',
-          'AM' => 'Armenia',
-          'AN' => 'Netherlands Antilles',
-          'AO' => 'Angola',
-          'AR' => 'Argentina',
-          'AT' => 'Austria',
-          'AU' => 'Australia',
-          'AW' => 'Aruba',
-          'AX' => 'Aland Island (Finland)',
-          'AZ' => 'Azerbaijan',
-          'BA' => 'Bosnia-Herzegovina',
-          'BB' => 'Barbados',
-          'BD' => 'Bangladesh',
-          'BE' => 'Belgium',
-          'BF' => 'Burkina Faso',
-          'BG' => 'Bulgaria',
-          'BH' => 'Bahrain',
-          'BI' => 'Burundi',
-          'BJ' => 'Benin',
-          'BM' => 'Bermuda',
-          'BN' => 'Brunei Darussalam',
-          'BO' => 'Bolivia',
-          'BR' => 'Brazil',
-          'BS' => 'Bahamas',
-          'BT' => 'Bhutan',
-          'BW' => 'Botswana',
-          'BY' => 'Belarus',
-          'BZ' => 'Belize',
-          'CA' => 'Canada',
-          'CC' => 'Cocos Island (Australia)',
-          'CD' => 'Congo, Democratic Republic of the',
-          'CF' => 'Central African Republic',
-          'CG' => 'Congo, Republic of the',
-          'CH' => 'Switzerland',
-          'CI' => 'Cote d Ivoire (Ivory Coast)',
-          'CK' => 'Cook Islands (New Zealand)',
-          'CL' => 'Chile',
-          'CM' => 'Cameroon',
-          'CN' => 'China',
-          'CO' => 'Colombia',
-          'CR' => 'Costa Rica',
-          'CU' => 'Cuba',
-          'CV' => 'Cape Verde',
-          'CX' => 'Christmas Island (Australia)',
-          'CY' => 'Cyprus',
-          'CZ' => 'Czech Republic',
-          'DE' => 'Germany',
-          'DJ' => 'Djibouti',
-          'DK' => 'Denmark',
-          'DM' => 'Dominica',
-          'DO' => 'Dominican Republic',
-          'DZ' => 'Algeria',
-          'EC' => 'Ecuador',
-          'EE' => 'Estonia',
-          'EG' => 'Egypt',
-          'ER' => 'Eritrea',
-          'ES' => 'Spain',
-          'ET' => 'Ethiopia',
-          'FI' => 'Finland',
-          'FJ' => 'Fiji',
-          'FK' => 'Falkland Islands',
-          'FM' => 'Micronesia, Federated States of',
-          'FO' => 'Faroe Islands',
-          'FR' => 'France',
-          'GA' => 'Gabon',
-          'GB' => 'Great Britain and Northern Ireland',
-          'GD' => 'Grenada',
-          'GE' => 'Georgia, Republic of',
-          'GF' => 'French Guiana',
-          'GH' => 'Ghana',
-          'GI' => 'Gibraltar',
-          'GL' => 'Greenland',
-          'GM' => 'Gambia',
-          'GN' => 'Guinea',
-          'GP' => 'Guadeloupe',
-          'GQ' => 'Equatorial Guinea',
-          'GR' => 'Greece',
-          'GS' => 'South Georgia (Falkland Islands)',
-          'GT' => 'Guatemala',
-          'GW' => 'Guinea-Bissau',
-          'GY' => 'Guyana',
-          'HK' => 'Hong Kong',
-          'HN' => 'Honduras',
-          'HR' => 'Croatia',
-          'HT' => 'Haiti',
-          'HU' => 'Hungary',
-          'ID' => 'Indonesia',
-          'IE' => 'Ireland',
-          'IL' => 'Israel',
-          'IN' => 'India',
-          'IQ' => 'Iraq',
-          'IR' => 'Iran',
-          'IS' => 'Iceland',
-          'IT' => 'Italy',
-          'JM' => 'Jamaica',
-          'JO' => 'Jordan',
-          'JP' => 'Japan',
-          'KE' => 'Kenya',
-          'KG' => 'Kyrgyzstan',
-          'KH' => 'Cambodia',
-          'KI' => 'Kiribati',
-          'KM' => 'Comoros',
-          'KN' => 'Saint Kitts (St. Christopher and Nevis)',
-          'KP' => 'North Korea (Korea, Democratic People\'s Republic of)',
-          'KR' => 'South Korea (Korea, Republic of)',
-          'KW' => 'Kuwait',
-          'KY' => 'Cayman Islands',
-          'KZ' => 'Kazakhstan',
-          'LA' => 'Laos',
-          'LB' => 'Lebanon',
-          'LC' => 'Saint Lucia',
-          'LI' => 'Liechtenstein',
-          'LK' => 'Sri Lanka',
-          'LR' => 'Liberia',
-          'LS' => 'Lesotho',
-          'LT' => 'Lithuania',
-          'LU' => 'Luxembourg',
-          'LV' => 'Latvia',
-          'LY' => 'Libya',
-          'MA' => 'Morocco',
-          'MC' => 'Monaco (France)',
-          'MD' => 'Moldova',
-          'MG' => 'Madagascar',
-          'MK' => 'Macedonia, Republic of',
-          'ML' => 'Mali',
-          'MM' => 'Burma',
-          'MN' => 'Mongolia',
-          'MO' => 'Macao',
-          'MQ' => 'Martinique',
-          'MR' => 'Mauritania',
-          'MS' => 'Montserrat',
-          'MT' => 'Malta',
-          'MU' => 'Mauritius',
-          'MV' => 'Maldives',
-          'MW' => 'Malawi',
-          'MX' => 'Mexico',
-          'MY' => 'Malaysia',
-          'MZ' => 'Mozambique',
-          'NA' => 'Namibia',
-          'NC' => 'New Caledonia',
-          'NE' => 'Niger',
-          'NG' => 'Nigeria',
-          'NI' => 'Nicaragua',
-          'NL' => 'Netherlands',
-          'NO' => 'Norway',
-          'NP' => 'Nepal',
-          'NR' => 'Nauru',
-          'NZ' => 'New Zealand',
-          'OM' => 'Oman',
-          'PA' => 'Panama',
-          'PE' => 'Peru',
-          'PF' => 'French Polynesia',
-          'PG' => 'Papua New Guinea',
-          'PH' => 'Philippines',
-          'PK' => 'Pakistan',
-          'PL' => 'Poland',
-          'PM' => 'Saint Pierre and Miquelon',
-          'PN' => 'Pitcairn Island',
-          'PT' => 'Portugal',
-          'PY' => 'Paraguay',
-          'QA' => 'Qatar',
-          'RE' => 'Reunion',
-          'RO' => 'Romania',
-          'RS' => 'Serbia',
-          'RU' => 'Russia',
-          'RW' => 'Rwanda',
-          'SA' => 'Saudi Arabia',
-          'SB' => 'Solomon Islands',
-          'SC' => 'Seychelles',
-          'SD' => 'Sudan',
-          'SE' => 'Sweden',
-          'SG' => 'Singapore',
-          'SH' => 'Saint Helena',
-          'SI' => 'Slovenia',
-          'SK' => 'Slovak Republic',
-          'SL' => 'Sierra Leone',
-          'SM' => 'San Marino',
-          'SN' => 'Senegal',
-          'SO' => 'Somalia',
-          'SR' => 'Suriname',
-          'ST' => 'Sao Tome and Principe',
-          'SV' => 'El Salvador',
-          'SY' => 'Syrian Arab Republic',
-          'SZ' => 'Swaziland',
-          'TC' => 'Turks and Caicos Islands',
-          'TD' => 'Chad',
-          'TG' => 'Togo',
-          'TH' => 'Thailand',
-          'TJ' => 'Tajikistan',
-          'TK' => 'Tokelau (Union) Group (Western Samoa)',
-          'TL' => 'East Timor (Indonesia)',
-          'TM' => 'Turkmenistan',
-          'TN' => 'Tunisia',
-          'TO' => 'Tonga',
-          'TR' => 'Turkey',
-          'TT' => 'Trinidad and Tobago',
-          'TV' => 'Tuvalu',
-          'TW' => 'Taiwan',
-          'TZ' => 'Tanzania',
-          'UA' => 'Ukraine',
-          'UG' => 'Uganda',
-          'UY' => 'Uruguay',
-          'UZ' => 'Uzbekistan',
-          'VA' => 'Vatican City',
-          'VC' => 'Saint Vincent and the Grenadines',
-          'VE' => 'Venezuela',
-          'VG' => 'British Virgin Islands',
-          'VN' => 'Vietnam',
-          'VU' => 'Vanuatu',
-          'WF' => 'Wallis and Futuna Islands',
-          'WS' => 'Western Samoa',
-          'YE' => 'Yemen',
-          'YT' => 'Mayotte (France)',
-          'ZA' => 'South Africa',
-          'ZM' => 'Zambia',
-          'ZW' => 'Zimbabwe',
-        );
-
-        if (isset($countries[$countryId])) {
-            return $countries[$countryId];
-        }
-
-        return false;
-    }
-
-    /**
-     * Clean service name from unsupported strings and characters
-     *
-     * @param  string $name
-     * @return string
-     */
-    protected function _filterServiceName($name)
-    {
-        $name = (string)preg_replace(array('~<[^/!][^>]+>.*</[^>]+>~sU', '~\<!--.*--\>~isU', '~<[^>]+>~is'), '', html_entity_decode($name));
-        $name = str_replace('*', '', $name);
-
-        return $name;
-    }
 }

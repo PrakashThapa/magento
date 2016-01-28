@@ -34,9 +34,9 @@
 
 class Mage_Adminhtml_Block_Sales_Order_Create_Sidebar_Pcompared extends Mage_Adminhtml_Block_Sales_Order_Create_Sidebar_Abstract
 {
-    protected function _construct()
+    public function __construct()
     {
-        parent::_construct();
+        parent::__construct();
         $this->setId('sales_order_create_sidebar_pcompared');
         $this->setDataId('pcompared');
     }

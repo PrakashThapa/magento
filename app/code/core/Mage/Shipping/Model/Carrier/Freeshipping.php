@@ -53,7 +53,8 @@ class Mage_Shipping_Model_Carrier_Freeshipping
         }
 
         $result = Mage::getModel('shipping/rate_result');
-        $packageValue = $request->getPackageValue();
+//      $packageValue = $request->getBaseCurrency()->convert($request->getPackageValueWithDiscount(), $request->getPackageCurrency());
+        $packageValue = $request->getPackageValueWithDiscount();
 
         $this->_updateFreeMethodQuote($request);
 

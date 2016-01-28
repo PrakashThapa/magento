@@ -50,7 +50,7 @@ class Mage_Core_Block_Html_Select extends Mage_Core_Block_Abstract
 
     public function addOption($value, $label, $params=array())
     {
-        $this->_options[] = array('value' => $value, 'label' => $label, 'params' => $params);
+        $this->_options[] = array('value'=>$value, 'label'=>$label);
         return $this;
     }
 
@@ -107,17 +107,14 @@ class Mage_Core_Block_Html_Select extends Mage_Core_Block_Abstract
 
         $isArrayOption = true;
         foreach ($this->getOptions() as $key => $option) {
-            $option['params'] = !empty($option['params']) ? $option['params'] : array();
             if ($isArrayOption && is_array($option)) {
-                $value  = $option['value'];
-                $label  = $option['label'];
-                $params = $option['params'];
+                $value = $option['value'];
+                $label = $option['label'];
             }
             else {
                 $value = $key;
                 $label = $option;
                 $isArrayOption = false;
-                $params = array();
             }
 
             if (is_array($value)) {
@@ -138,8 +135,7 @@ class Mage_Core_Block_Html_Select extends Mage_Core_Block_Abstract
             } else {
                 $html.= $this->_optionToHtml(array(
                     'value' => $value,
-                    'label' => $label,
-                    'params' => $params
+                    'label' => $label
                 ),
                     in_array($value, $values)
                 );
@@ -149,38 +145,15 @@ class Mage_Core_Block_Html_Select extends Mage_Core_Block_Abstract
         return $html;
     }
 
-    /**
-     * Return option HTML node
-     *
-     * @param array $option
-     * @param boolean $selected
-     * @return string
-     */
-    protected function _optionToHtml($option, $selected = false)
+    protected function _optionToHtml($option, $selected=false)
     {
         $selectedHtml = $selected ? ' selected="selected"' : '';
         if ($this->getIsRenderToJsTemplate() === true) {
             $selectedHtml .= ' #{option_extra_attr_' . self::calcOptionHash($option['value']) . '}';
         }
+        $html = '<option value="'.$this->htmlEscape($option['value']).'"'.$selectedHtml.'>'.$this->htmlEscape($option['label']).'</option>';
 
-        $params = '';
-        if (!empty($option['params']) && is_array($option['params'])) {
-            foreach ($option['params'] as $key => $value) {
-                if (is_array($value)) {
-                    foreach ($value as $keyMulti => $valueMulti) {
-                        $params .= sprintf(' %s="%s" ', $keyMulti, $valueMulti);
-                    }
-                } else {
-                    $params .= sprintf(' %s="%s" ', $key, $value);
-                }
-            }
-        }
-
-        return sprintf('<option value="%s"%s %s>%s</option>',
-            $this->htmlEscape($option['value']),
-            $selectedHtml,
-            $params,
-            $this->htmlEscape($option['label']));
+        return $html;
     }
 
     public function getHtml()

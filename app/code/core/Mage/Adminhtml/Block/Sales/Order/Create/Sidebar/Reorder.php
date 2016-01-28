@@ -34,16 +34,11 @@
 class Mage_Adminhtml_Block_Sales_Order_Create_Sidebar_Reorder extends Mage_Adminhtml_Block_Sales_Order_Create_Sidebar_Abstract
 {
 
-    /**
-     * Storage action on selected item
-     *
-     * @var string
-     */
-    protected $_sidebarStorageAction = 'add_order_item';
+    protected $_sidebarStorageAction = 'reorder';
 
-    protected function _construct()
+    public function __construct()
     {
-        parent::_construct();
+        parent::__construct();
         $this->setId('sales_order_create_sidebar_reorder');
         $this->setDataId('reorder');
     }

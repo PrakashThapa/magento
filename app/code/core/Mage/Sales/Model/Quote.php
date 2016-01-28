@@ -243,19 +243,6 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
     }
 
     /**
-     * Loading quote by identifier
-     *
-     * @param int $quoteId
-     * @return Mage_Sales_Model_Quote
-     */
-    public function loadByIdWithoutStore($quoteId)
-    {
-        $this->_getResource()->loadByIdWithoutStore($this, $quoteId);
-        $this->_afterLoad();
-        return $this;
-    }
-
-    /**
      * Assign customer model object data to quote
      *
      * @param   Mage_Customer_Model_Customer $customer
@@ -263,45 +250,23 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
      */
     public function assignCustomer(Mage_Customer_Model_Customer $customer)
     {
-        return $this->assignCustomerWithAddressChange($customer);
-    }
-
-    /**
-     * Assign customer model to quote with billing and shipping address change
-     *
-     * @param  Mage_Customer_Model_Customer    $customer
-     * @param  Mage_Sales_Model_Quote_Address  $billingAddress
-     * @param  Mage_Sales_Model_Quote_Address  $shippingAddress
-     * @return Mage_Sales_Model_Quote
-     */
-    public function assignCustomerWithAddressChange(
-        Mage_Customer_Model_Customer    $customer,
-        Mage_Sales_Model_Quote_Address  $billingAddress  = null,
-        Mage_Sales_Model_Quote_Address  $shippingAddress = null
-    )
-    {
         if ($customer->getId()) {
             $this->setCustomer($customer);
 
-            if (!is_null($billingAddress)) {
+            $defaultBillingAddress = $customer->getDefaultBillingAddress();
+            if ($defaultBillingAddress && $defaultBillingAddress->getId()) {
+                $billingAddress = Mage::getModel('sales/quote_address')
+                    ->importCustomerAddress($defaultBillingAddress);
                 $this->setBillingAddress($billingAddress);
-            } else {
-                $defaultBillingAddress = $customer->getDefaultBillingAddress();
-                if ($defaultBillingAddress && $defaultBillingAddress->getId()) {
-                    $billingAddress = Mage::getModel('sales/quote_address')
-                        ->importCustomerAddress($defaultBillingAddress);
-                    $this->setBillingAddress($billingAddress);
-                }
             }
 
-            if (is_null($shippingAddress)) {
-                $defaultShippingAddress = $customer->getDefaultShippingAddress();
-                if ($defaultShippingAddress && $defaultShippingAddress->getId()) {
-                    $shippingAddress = Mage::getModel('sales/quote_address')
-                    ->importCustomerAddress($defaultShippingAddress);
-                } else {
-                    $shippingAddress = Mage::getModel('sales/quote_address');
-                }
+            $defaultShippingAddress= $customer->getDefaultShippingAddress();
+            if ($defaultShippingAddress && $defaultShippingAddress->getId()) {
+                $shippingAddress = Mage::getModel('sales/quote_address')
+                ->importCustomerAddress($defaultShippingAddress);
+            }
+            else {
+                $shippingAddress = Mage::getModel('sales/quote_address');
             }
             $this->setShippingAddress($shippingAddress);
         }
@@ -340,21 +305,6 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
             }
         }
         return $this->_customer;
-    }
-
-    /**
-     * Retrieve customer group id
-     *
-     * @return int
-     */
-    public function getCustomerGroupId()
-    {
-        if ($this->getCustomerId()) {
-            return ($this->getData('customer_group_id')) ? $this->getData('customer_group_id')
-                : $this->getCustomer()->getGroupId();
-        } else {
-            return Mage_Customer_Model_Group::NOT_LOGGED_IN_ID;
-        }
     }
 
     public function getCustomerTaxClassId()
@@ -637,23 +587,6 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
     }
 
     /**
-     * Checking product exist in Quote
-     *
-     * @param int $productId
-     * @return bool
-     */
-    public function hasProductId($productId)
-    {
-        foreach ($this->getAllItems() as $item) {
-            if ($item->getProductId() == $productId) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
      * Retrieve item model object by item identifier
      *
      * @param   int $itemId
@@ -672,9 +605,7 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
      */
     public function removeItem($itemId)
     {
-        $item = $this->getItemById($itemId);
-        if ($item) {
-            $item->setQuote($this);
+        if ($item = $this->getItemById($itemId)) {
             /**
              * If we remove item from quote - we can't use multishipping mode
              */
@@ -719,16 +650,16 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
     }
 
     /**
-     * Advanced func to add product to quote - processing mode can be specified there.
-     * Returns error message if product type instance can't prepare product.
+     * Add product to quote
      *
-     * @param mixed $product
-     * @param null|float|Varien_Object $request
-     * @param null|string $processMode
-     * @return Mage_Sales_Model_Quote_Item|string
+     * return error message if product type instance can't prepare product
+     *
+     * @param   mixed $product
+     * @return  Mage_Sales_Model_Quote_Item || string
      */
-    public function addProductAdvanced(Mage_Catalog_Model_Product $product, $request = null, $processMode = null)
+    public function addProduct(Mage_Catalog_Model_Product $product, $request=null)
     {
+
         if ($request === null) {
             $request = 1;
         }
@@ -740,11 +671,12 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
         }
 
         $cartCandidates = $product->getTypeInstance(true)
-            ->prepareForCartAdvanced($request, $product, $processMode);
+            ->prepareForCart($request, $product);
 
         /**
          * Error message
          */
+
         if (is_string($cartCandidates)) {
             return $cartCandidates;
         }
@@ -756,13 +688,13 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
             $cartCandidates = array($cartCandidates);
         }
 
+
+
+
         $parentItem = null;
         $errors = array();
         $items = array();
         foreach ($cartCandidates as $candidate) {
-            // Child items can be sticked together only within their parent
-            $stickWithinParent = $candidate->getParentProductId() ? $parentItem : null;
-            $candidate->setStickWithinParent($stickWithinParent);
             $item = $this->_addCatalogProduct($candidate, $candidate->getCartQty());
             $items[] = $item;
 
@@ -772,7 +704,7 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
             if (!$parentItem) {
                 $parentItem = $item;
             }
-            if ($parentItem && $candidate->getParentProductId() && !$item->getId()) {
+            if ($parentItem && $candidate->getParentProductId()) {
                 $item->setParentItem($parentItem);
             }
 
@@ -795,21 +727,6 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
         return $item;
     }
 
-
-    /**
-     * Add product to quote
-     *
-     * return error message if product type instance can't prepare product
-     *
-     * @param mixed $product
-     * @param null|float|Varien_Object $request
-     * @return Mage_Sales_Model_Quote_Item|string
-     */
-    public function addProduct(Mage_Catalog_Model_Product $product, $request = null)
-    {
-        return $this->addProductAdvanced($product, $request, Mage_Catalog_Model_Product_Type_Abstract::PROCESS_MODE_FULL);
-    }
-
     /**
      * Adding catalog product object data to quote
      *
@@ -818,7 +735,6 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
      */
     protected function _addCatalogProduct(Mage_Catalog_Model_Product $product, $qty = 1)
     {
-        $newItem = false;
         $item = $this->getItemByProduct($product);
         if (!$item) {
             $item = Mage::getModel('sales/quote_item');
@@ -829,7 +745,6 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
             else {
                 $item->setStoreId(Mage::app()->getStore()->getId());
             }
-            $newItem = true;
         }
 
         /**
@@ -842,96 +757,16 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
         $item->setOptions($product->getCustomOptions())
             ->setProduct($product);
 
-        // Add only item that is not in quote already (there can be other new or already saved item
-        if ($newItem) {
-            $this->addItem($item);
-        }
+
+        $this->addItem($item);
 
         return $item;
     }
 
     /**
-     * Updates quote item with new configuration
-     *
-     * $params sets how current item configuration must be taken into account and additional options.
-     * It's passed to Mage_Catalog_Helper_Product->addParamsToBuyRequest() to compose resulting buyRequest.
-     *
-     * Basically it can hold
-     * - 'current_config', Varien_Object or array - current buyRequest that configures product in this item,
-     *   used to restore currently attached files
-     * - 'files_prefix': string[a-z0-9_] - prefix that was added at frontend to names of file options (file inputs), so they won't
-     *   intersect with other submitted options
-     *
-     * For more options see Mage_Catalog_Helper_Product->addParamsToBuyRequest()
-     *
-     * @param int $itemId
-     * @param Varien_Object $buyRequest
-     * @param null|array|Varien_Object $params
-     * @return Mage_Sales_Model_Quote_Item
-     *
-     * @see Mage_Catalog_Helper_Product::addParamsToBuyRequest()
-     */
-    public function updateItem($itemId, $buyRequest, $params = null)
-    {
-        $item = $this->getItemById($itemId);
-        if (!$item) {
-            Mage::throwException(Mage::helper('sales')->__('Wrong quote item id to update configuration.'));
-        }
-        $productId = $item->getProduct()->getId();
-
-        //We need to create new clear product instance with same $productId
-        //to set new option values from $buyRequest
-        $product = Mage::getModel('catalog/product')
-            ->setStoreId($this->getStore()->getId())
-            ->load($productId);
-
-        if (!$params) {
-            $params = new Varien_Object();
-        } else if (is_array($params)) {
-            $params = new Varien_Object($params);
-        }
-        $params->setCurrentConfig($item->getBuyRequest());
-        $buyRequest = Mage::helper('catalog/product')->addParamsToBuyRequest($buyRequest, $params);
-
-        $resultItem = $this->addProduct($product, $buyRequest);
-
-        if (is_string($resultItem)) {
-            Mage::throwException($resultItem);
-        }
-
-        if ($resultItem->getParentItem()) {
-            $resultItem = $resultItem->getParentItem();
-        }
-
-        if ($resultItem->getId() != $itemId) {
-            /*
-             * Product configuration didn't stick to original quote item
-             * It either has same configuration as some other quote item's product or completely new configuration
-             */
-            $this->removeItem($itemId);
-
-            $items = $this->getAllItems();
-            foreach ($items as $item) {
-                if (($item->getProductId() == $productId) && ($item->getId() != $resultItem->getId())) {
-                    if ($resultItem->compare($item)) {
-                        // Product configuration is same as in other quote item
-                        $resultItem->setQty($resultItem->getQty() + $item->getQty());
-                        $this->removeItem($item->getId());
-                        break;
-                    }
-                }
-            }
-        } else {
-            $resultItem->setQty($buyRequest->getQty());
-        }
-
-        return $resultItem;
-    }
-
-    /**
      * Retrieve quote item by product id
      *
-     * @param   Mage_Catalog_Model_Product $product
+     * @param   int $productId
      * @return  Mage_Sales_Model_Quote_Item || false
      */
     public function getItemByProduct($product)
@@ -1289,7 +1124,6 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
             $countItems ++;
             if (!$_item->getProduct()->getIsVirtual()) {
                 $isVirtual = false;
-                break;
             }
         }
         return $countItems == 0 ? false : $isVirtual;

@@ -28,7 +28,7 @@
 <config>
     <modules>
         <Mage_Bundle>
-            <version>0.1.14</version>
+            <version>0.1.12</version>
         </Mage_Bundle>
     </modules>
     <global>
@@ -49,9 +49,6 @@
                     <selection>
                         <table>catalog_product_bundle_selection</table>
                     </selection>
-                    <selection_price>
-                        <table>catalog_product_bundle_selection_price</table>
-                    </selection_price>
                     <price_index>
                         <table>catalog_product_bundle_price_index</table>
                     </price_index>
@@ -231,13 +228,13 @@
             </catalog_product_dataflow>
         </fieldsets>
         <routers>
-            <adminhtml>
+            <bundle>
+                <use>admin</use>
                 <args>
-                    <modules>
-                        <Mage_Bundle before="Mage_Adminhtml">Mage_Bundle_Adminhtml</Mage_Bundle>
-                    </modules>
+                    <module>Mage_Bundle</module>
+                    <frontName>bundle</frontName>
                 </args>
-            </adminhtml>
+            </bundle>
         </routers>
     </admin>
     <adminhtml>
@@ -257,15 +254,6 @@
                 </bundle>
             </updates>
         </layout>
-        <sales>
-            <order>
-                <create>
-                    <available_product_types>
-                        <bundle/>
-                    </available_product_types>
-                </create>
-            </order>
-        </sales>
         <events>
             <catalog_product_prepare_save>
                 <observers>

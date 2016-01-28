@@ -130,9 +130,7 @@ class Mage_Catalog_Model_Resource_Eav_Mysql4_Product_Indexer_Price extends Mage_
             $write->delete($this->getIdxTable(), $where);
 
             // insert new index
-            $this->useDisableKeys(false);
             $this->insertFromTable($this->getIdxTable(), $this->getMainTable());
-            $this->useDisableKeys(true);
 
             $this->commit();
         } catch (Exception $e) {
@@ -481,6 +479,9 @@ class Mage_Catalog_Model_Resource_Eav_Mysql4_Product_Indexer_Price extends Mage_
     protected function _prepareWebsiteDateTable()
     {
         $write = $this->_getWriteAdapter();
+        $table = $this->_getWebsiteDateTable();
+        $write->delete($table);
+
         $baseCurrency = Mage::app()->getBaseCurrencyCode();
 
         $select = $write->select()
@@ -522,14 +523,9 @@ class Mage_Catalog_Model_Resource_Eav_Mysql4_Product_Indexer_Price extends Mage_
             }
         }
 
-        $write->beginTransaction();
-        $table = $this->_getWebsiteDateTable();
-        $write->delete($table);
-
         if ($data) {
             $write->insertMultiple($table, $data);
         }
-        $write->commit();
 
         return $this;
     }

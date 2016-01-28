@@ -43,7 +43,6 @@ class Mage_Review_Model_Mysql4_Review_Product_Collection extends Mage_Catalog_Mo
         $this->_init('catalog/product');
         $this->setRowIdFieldName('review_id');
         $this->_reviewStoreTable = Mage::getSingleton('core/resource')->getTableName('review/review_store');
-        $this->_initTables();
     }
 
     protected function _initSelect()
@@ -237,22 +236,18 @@ class Mage_Review_Model_Mysql4_Review_Product_Collection extends Mage_Catalog_Mo
                 break;
             case 'type':
                 if($condition == 1) {
-                    $this->getSelect()
-                        ->where('rdt.customer_id IS NULL AND rdt.store_id = ?', Mage_Core_Model_App::ADMIN_STORE_ID);
+                    $this->getSelect()->where('rdt.customer_id = 0');
                 } elseif ($condition == 2) {
                     $this->getSelect()->where('rdt.customer_id > 0');
                 } else {
-                    $this->getSelect()
-                        ->where('rdt.customer_id IS NULL AND rdt.store_id <> ?', Mage_Core_Model_App::ADMIN_STORE_ID);
+                    $this->getSelect()->where('rdt.customer_id IS NULL');
                 }
-
                 return $this;
                 break;
 
             default:
                 parent::addAttributeToFilter($attribute, $condition, $joinType);
         }
-
         return $this;
     }
 

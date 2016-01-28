@@ -81,27 +81,16 @@ class Mage_Catalog_Block_Product_View_Options_Type_Date extends Mage_Catalog_Blo
      */
     public function getCalendarDateHtml()
     {
-        $option = $this->getOption();
-        $value = $this->getProduct()->getPreconfiguredValues()->getData('options/' . $option->getId() . '/date');
-
-        //$require = $this->getOption()->getIsRequire() ? ' required-entry' : '';
+        // $require = $this->getOption()->getIsRequire() ? ' required-entry' : '';
         $require = '';
-
-        $yearStart = Mage::getSingleton('catalog/product_option_type_date')->getYearStart();
-        $yearEnd = Mage::getSingleton('catalog/product_option_type_date')->getYearEnd();
-
         $calendar = $this->getLayout()
             ->createBlock('core/html_date')
             ->setId('options_'.$this->getOption()->getId().'_date')
             ->setName('options['.$this->getOption()->getId().'][date]')
             ->setClass('product-custom-option datetime-picker input-text' . $require)
             ->setImage($this->getSkinUrl('images/calendar.gif'))
-            ->setFormat(Mage::app()->getLocale()->getDateStrFormat(Mage_Core_Model_Locale::FORMAT_TYPE_SHORT))
-            ->setValue($value)
-            ->setYearsRange('[' . $yearStart . ', ' . $yearEnd . ']');
-        if (!$this->getSkipJsReloadPrice()) {
-            $calendar->setExtraParams('onchange="opConfig.reloadPrice()"');
-        }
+            ->setExtraParams('onchange="opConfig.reloadPrice()"')
+            ->setFormat(Mage::app()->getLocale()->getDateStrFormat(Mage_Core_Model_Locale::FORMAT_TYPE_SHORT));
 
         return $calendar->getHtml();
     }
@@ -113,23 +102,23 @@ class Mage_Catalog_Block_Product_View_Options_Type_Date extends Mage_Catalog_Blo
      */
     public function getDropDownsDateHtml()
     {
-        $fieldsSeparator = '&nbsp;';
-        $fieldsOrder = Mage::getSingleton('catalog/product_option_type_date')->getConfigData('date_fields_order');
-        $fieldsOrder = str_replace(',', $fieldsSeparator, $fieldsOrder);
+        $_fieldsSeparator = '&nbsp;';
+        $_fieldsOrder = Mage::getSingleton('catalog/product_option_type_date')->getConfigData('date_fields_order');
+        $_fieldsOrder = str_replace(',', $_fieldsSeparator, $_fieldsOrder);
 
         $monthsHtml = $this->_getSelectFromToHtml('month', 1, 12);
         $daysHtml = $this->_getSelectFromToHtml('day', 1, 31);
 
-        $yearStart = Mage::getSingleton('catalog/product_option_type_date')->getYearStart();
-        $yearEnd = Mage::getSingleton('catalog/product_option_type_date')->getYearEnd();
-        $yearsHtml = $this->_getSelectFromToHtml('year', $yearStart, $yearEnd);
+        $_yearStart = Mage::getSingleton('catalog/product_option_type_date')->getYearStart();
+        $_yearEnd = Mage::getSingleton('catalog/product_option_type_date')->getYearEnd();
+        $yearsHtml = $this->_getSelectFromToHtml('year', $_yearStart, $_yearEnd);
 
-        $translations = array(
+        $_translations = array(
             'd' => $daysHtml,
             'm' => $monthsHtml,
             'y' => $yearsHtml
         );
-        return strtr($fieldsOrder, $translations);
+        return strtr($_fieldsOrder, $_translations);
     }
 
     /**
@@ -189,29 +178,16 @@ class Mage_Catalog_Block_Product_View_Options_Type_Date extends Mage_Catalog_Blo
      */
     protected function _getHtmlSelect($name, $value = null)
     {
-        $option = $this->getOption();
-
         // $require = $this->getOption()->getIsRequire() ? ' required-entry' : '';
         $require = '';
         $select = $this->getLayout()->createBlock('core/html_select')
             ->setId('options_' . $this->getOption()->getId() . '_' . $name)
             ->setClass('product-custom-option datetime-picker' . $require)
-            ->setExtraParams()
-            ->setName('options[' . $option->getId() . '][' . $name . ']');
-
-        $extraParams = 'style="width:auto"';
-        if (!$this->getSkipJsReloadPrice()) {
-            $extraParams .= ' onchange="opConfig.reloadPrice()"';
-        }
-        $select->setExtraParams($extraParams);
-
-        if (is_null($value)) {
-            $value = $this->getProduct()->getPreconfiguredValues()->getData('options/' . $option->getId() . '/' . $name);
-        }
+            ->setExtraParams('style="width:auto;" onchange="opConfig.reloadPrice()"')
+            ->setName('options[' . $this->getOption()->getId() . '][' . $name . ']');
         if (!is_null($value)) {
             $select->setValue($value);
         }
-
         return $select;
     }
 

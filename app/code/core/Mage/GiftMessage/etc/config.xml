@@ -28,7 +28,7 @@
 <config>
     <modules>
         <Mage_GiftMessage>
-            <version>0.7.6</version>
+            <version>0.7.2</version>
         </Mage_GiftMessage>
     </modules>
     <global>
@@ -60,15 +60,6 @@
                 </setup>
             </giftmessage_setup>
         </resources>
-        <sales>
-            <quote>
-                <item>
-                    <product_attributes>
-                        <gift_message_available/>
-                    </product_attributes>
-                </item>
-            </quote>
-        </sales>
     </global>
 
     <default>
@@ -146,13 +137,6 @@
                  </observers>
             </sales_convert_order_item_to_quote_item>
         </events>
-        <layout>
-            <updates>
-                <giftmessage>
-                    <file>giftmessage.xml</file>
-                </giftmessage>
-            </updates>
-        </layout>
     </adminhtml>
     <frontend>
         <events>
@@ -201,6 +185,15 @@
                     </giftmessage>
                 </observers>
             </checkout_controller_multishipping_shipping_post>
+            <catalog_product_collection_load_after>
+                <observers>
+                    <giftmessage>
+                        <type>model</type>
+                        <class>giftmessage/observer</class>
+                        <method>catalogEventProductCollectionAfterLoad</method>
+                    </giftmessage>
+                </observers>
+            </catalog_product_collection_load_after>
             <sales_convert_order_to_quote>
                 <observers>
                     <giftmessage>
@@ -230,11 +223,11 @@
             </modules>
         </translate>
         <layout>
-            <updates>
-                <giftmessage>
-                    <file>giftmessage.xml</file>
-                </giftmessage>
-            </updates>
-        </layout>
+          <updates>
+              <giftmessage>
+                  <file>giftmessage.xml</file>
+              </giftmessage>
+          </updates>
+      </layout>
     </frontend>
 </config>

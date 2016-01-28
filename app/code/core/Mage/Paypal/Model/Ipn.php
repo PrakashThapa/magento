@@ -214,7 +214,7 @@ class Mage_Paypal_Model_Ipn
      * Validate incoming request data, as PayPal recommends
      *
      * @throws Exception
-     * @link https://cms.paypal.com/cgi-bin/marketingweb?cmd=_render-content&content_ID=developer/e_howto_admin_IPNIntro
+     * @see https://cms.paypal.com/cgi-bin/marketingweb?cmd=_render-content&content_ID=developer/e_howto_admin_IPNIntro
      */
     protected function _verifyOrder()
     {
@@ -370,9 +370,6 @@ class Mage_Paypal_Model_Ipn
      */
     protected function _registerPaymentCapture()
     {
-        if ($this->getRequestData('transaction_entity') == 'auth') {
-            return;
-        }
         $this->_importPaymentInformation();
         $payment = $this->_order->getPayment();
         $payment->setTransactionId($this->getRequestData('txn_id'))
@@ -384,7 +381,7 @@ class Mage_Paypal_Model_Ipn
         $this->_order->save();
 
         // notify customer
-        if ($invoice = $payment->getCreatedInvoice() && !$this->_order->getEmailSent()) {
+        if ($invoice = $payment->getCreatedInvoice()) {
             $comment = $this->_order->sendNewOrderEmail()->addStatusHistoryComment(
                     Mage::helper('paypal')->__('Notified customer about invoice #%s.', $invoice->getIncrementId())
                 )
@@ -514,9 +511,6 @@ class Mage_Paypal_Model_Ipn
             ->setParentTransactionId($this->getRequestData('parent_txn_id'))
             ->setIsTransactionClosed(0)
             ->registerAuthorizationNotification($this->getRequestData('mc_gross'));
-        if (!$this->_order->getEmailSent()) {
-            $this->_order->sendNewOrderEmail();
-        }
         $this->_order->save();
     }
 

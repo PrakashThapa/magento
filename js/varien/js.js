@@ -398,72 +398,50 @@ Varien.Tabs.prototype = {
   }
 }
 
-Varien.DateElement = Class.create();
-Varien.DateElement.prototype = {
-    initialize: function(type, content, required, format) {
-        if (type == 'id') {
-            // id prefix
-            this.day    = $(content + 'day');
-            this.month  = $(content + 'month');
-            this.year   = $(content + 'year');
-            this.full   = $(content + 'full');
-            this.advice = $(content + 'advice');
-        } else if (type == 'container') {
-            // content must be container with data
-            this.day    = content.day;
-            this.month  = content.month;
-            this.year   = content.year;
-            this.full   = content.full;
-            this.advice = content.advice;
-        } else {
-            return;
-        }
-
+Varien.DOB = Class.create();
+Varien.DOB.prototype = {
+    initialize: function(selector, required, format) {
+        var el        = $$(selector)[0];
+        this.day      = Element.select($(el), '.dob-day input')[0];
+        this.month    = Element.select($(el), '.dob-month input')[0];
+        this.year     = Element.select($(el), '.dob-year input')[0];
+        this.dob      = Element.select($(el), '.dob-full input')[0];
+        this.advice   = Element.select($(el), '.validation-advice')[0];
         this.required = required;
         this.format   = format;
-        
-        this.day.addClassName('validate-custom');
-        this.day.validate = this.validate.bind(this);
-        this.month.addClassName('validate-custom');
-        this.month.validate = this.validate.bind(this);
-        this.year.addClassName('validate-custom');
-        this.year.validate = this.validate.bind(this);
 
+        this.day.validate = this.validate.bind(this);
+        this.month.validate = this.validate.bind(this);
+        this.year.validate = this.validate.bind(this);
+        
         this.year.setAttribute('autocomplete','off');
 
         this.advice.hide();
     },
+
     validate: function() {
-        var error = false, day = parseInt(this.day.value) || 0, month = parseInt(this.month.value) || 0, year = parseInt(this.year.value) || 0;
-        if (!day && !month && !year) {
+        var error = false;
+
+        if (this.day.value=='' && this.month.value=='' && this.year.value=='') {
             if (this.required) {
                 error = 'This date is a required value.';
             } else {
-                this.full.value = '';
+                this.dob.value = '';
             }
-        } else if (!day || !month || !year) {
+        } else if (this.day.value=='' || this.month.value=='' || this.year.value=='') {
             error = 'Please enter a valid full date.';
         } else {
-            var date = new Date, curyear = date.getFullYear(), countDaysInMonth = 0, errorType = null;
-            date.setYear(year); date.setMonth(month-1); date.setDate(32);
-            countDaysInMonth = 32 - date.getDate();
-            if(!countDaysInMonth || countDaysInMonth>31) countDaysInMonth = 31;
-             
-            if (day<1 || day>countDaysInMonth) {
-                errorType = 'day';
-                error = 'Please enter a valid day (1-%d).';
-            } else if (month<1 || month>12) {
-                errorType = 'month';
+            var date = new Date();
+            if (this.day.value<1 || this.day.value>31) {
+                error = 'Please enter a valid day (1-31).';
+            } else if (this.month.value<1 || this.month.value>12) {
                 error = 'Please enter a valid month (1-12).';
-            } else if (year<1900 || year>curyear) {
-                errorType = 'year';
-                error = 'Please enter a valid year (1900-%d).';
+            } else if (this.year.value<1900 || this.year.value>date.getFullYear()) {
+                error = 'Please enter a valid year (1900-'+date.getFullYear()+').';
             } else {
-                if(day % 10 == day) this.day.value = '0'+day;
-                if(month % 10 == month) this.month.value = '0'+month;
-                this.full.value = this.format.replace(/%[mb]/i, this.month.value).replace(/%[de]/i, this.day.value).replace(/%y/i, this.year.value);
-                var testFull = this.month.value + '/' + this.day.value + '/'+ this.year.value;
-                var test = new Date(testFull);
+                this.dob.value = this.format.replace(/(%m|%b)/i, this.month.value).replace(/(%d|%e)/i, this.day.value).replace(/%y/i, this.year.value);
+                var testDOB = this.month.value + '/' + this.day.value + '/'+ this.year.value;
+                var test = new Date(testDOB);
                 if (isNaN(test)) {
                     error = 'Please enter a valid date.';
                 }
@@ -472,51 +450,19 @@ Varien.DateElement.prototype = {
 
         if (error !== false) {
             try {
-                error = Translator.translate(error);
+                this.advice.innerHTML = Translator.translate(error);
             }
-            catch (e) {}
-            this.advice.innerHTML = error.replace('%d', errorType == 'day' ? countDaysInMonth : curyear);
+            catch (e) {
+                this.advice.innerHTML = error;
+            }
             this.advice.show();
             return false;
         }
-        
-        // fixing elements class
-        this.day.removeClassName('validation-failed');
-        this.month.removeClassName('validation-failed');
-        this.year.removeClassName('validation-failed');
-        
+
         this.advice.hide();
         return true;
     }
-};
-
-Varien.DOB = Class.create();
-Varien.DOB.prototype = {
-    initialize: function(selector, required, format) {
-        var el = $$(selector)[0];
-        var container       = {};
-        container.day       = Element.select(el, '.dob-day input')[0];
-        container.month     = Element.select(el, '.dob-month input')[0];
-        container.year      = Element.select(el, '.dob-year input')[0];
-        container.full      = Element.select(el, '.dob-full input')[0];
-        container.advice    = Element.select(el, '.validation-advice')[0];
-        
-        new Varien.DateElement('container', container, required, format);
-    }
-};
-
-Varien.FileElement = Class.create();
-Varien.FileElement.prototype = {
-    initialize: function (id) {
-        this.fileElement = $(id);
-        this.hiddenElement = $(id + '_value');
-        
-        this.fileElement.observe('change', this.selectFile.bind(this));
-    },
-    selectFile: function(event) {
-        this.hiddenElement.value = this.fileElement.getValue();
-    }
-};
+}
 
 Validation.addAllThese([
     ['validate-custom', ' ', function(v,elm) {

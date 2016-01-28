@@ -197,10 +197,7 @@ class Mage_Reports_Model_Mysql4_Product_Collection extends Mage_Catalog_Model_Re
 
         $this->getSelect()->reset()->from(
             array('order_items' => $qtyOrderedTableName),
-            array(
-                'ordered_qty' => "SUM(order_items.{$qtyOrderedFieldName})",
-                'order_items_name' => 'order_items.name'
-            )
+            array('ordered_qty' => "SUM(order_items.{$qtyOrderedFieldName})")
         );
 
          $_joinCondition = $this->getConnection()->quoteInto(
@@ -215,9 +212,9 @@ class Mage_Reports_Model_Mysql4_Product_Collection extends Mage_Catalog_Model_Re
 
 
         $this->getSelect()
-            ->joinLeft(array('e' => $this->getProductEntityTableName()),
+            ->joinInner(array('e' => $this->getProductEntityTableName()),
                 "e.entity_id = order_items.{$productIdFieldName} AND e.entity_type_id = {$this->getProductEntityTypeId()}{$productTypes}")
-            ->group('order_items.product_id')
+            ->group('e.entity_id')
             ->having('ordered_qty > 0');
 
         return $this;

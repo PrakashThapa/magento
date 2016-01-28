@@ -27,10 +27,7 @@
 
 /**
  * Wishlist Product collection
- * Deprecated because after Magento 1.4.2.0 it's impossible
- * to use product collection in wishlist
  *
- * @deprecated after 1.4.2.0
  * @category   Mage
  * @package    Mage_Wishlist
  * @author     Magento Core Team <core@magentocommerce.com>
@@ -38,14 +35,13 @@
 class Mage_Wishlist_Model_Mysql4_Product_Collection
     extends Mage_Catalog_Model_Resource_Eav_Mysql4_Product_Collection
 {
+
     /**
      * Add days in whishlist filter of product collection
      *
      * @var boolean
      */
     protected $_addDaysInWishlist = false;
-
-
 
     /**
      * Get add days in whishlist filter of product collection flag
@@ -162,16 +158,5 @@ class Mage_Wishlist_Model_Mysql4_Product_Collection
             return $this->_joinFields[$attributeCode]['field'];
         }
         return parent::_getAttributeFieldName($attributeCode);
-    }
-
-    /**
-     * Prevent loading collection because since Magento 1.4.2.0 it's impossible
-     * to use product collection in wishlist
-     *
-     * @return bool
-     */
-    public function load($printQuery = false, $logQuery = false)
-    {
-        return $this;
     }
 }

@@ -242,7 +242,7 @@ class Mage_Paypal_Model_Pro
                 ->setAmount($amount)
                 ->setCurrencyCode($order->getBaseCurrencyCode())
             ;
-            $canRefundMore = $payment->getCreditmemo()->getInvoice()->canRefund();
+            $canRefundMore = $order->canCreditmemo(); // TODO: fix this to be able to create multiple refunds
             $isFullRefund = !$canRefundMore
                 && (0 == ((float)$order->getBaseTotalOnlineRefunded() + (float)$order->getBaseTotalOfflineRefunded()));
             $api->setRefundType($isFullRefund ? Mage_Paypal_Model_Config::REFUND_TYPE_FULL
@@ -274,7 +274,7 @@ class Mage_Paypal_Model_Pro
      */
     public function canReviewPayment(Mage_Payment_Model_Info $payment)
     {
-        return Mage_Paypal_Model_Info::isPaymentReviewRequired($payment);
+        return Mage_Paypal_Model_Info::isFraudReviewAllowed($payment);
     }
 
     /**
@@ -394,16 +394,6 @@ class Mage_Paypal_Model_Pro
      */
     public function updateRecurringProfile(Mage_Payment_Model_Recurring_Profile $profile)
     {
-
-    }
-
-    /**
-     * Manage status
-     *
-     * @param Mage_Payment_Model_Recurring_Profile $profile
-     */
-    public function updateRecurringProfileStatus(Mage_Payment_Model_Recurring_Profile $profile)
-    {
         $api = $this->getApi();
         $action = null;
         switch ($profile->getNewState()) {
@@ -419,6 +409,16 @@ class Mage_Paypal_Model_Pro
             ->setAction($action)
             ->callManageRecurringPaymentsProfileStatus()
         ;
+    }
+
+    /**
+     * Manage status
+     *
+     * @param Mage_Payment_Model_Recurring_Profile $profile
+     */
+    public function updateRecurringProfileStatus(Mage_Payment_Model_Recurring_Profile $profile)
+    {
+
     }
 
     /**

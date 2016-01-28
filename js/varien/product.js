@@ -278,30 +278,12 @@ Product.Config.prototype = {
             $(this.settings[i]).nextSetting   = nextSetting;
             childSettings.push(this.settings[i]);
         }
-        
-        // Set default values - from config and overwrite them by url values
-        if (config.defaultValues) {
-            this.values = config.defaultValues;
-        }
-        
-        var separatorIndex = window.location.href.indexOf('#');
-        if (separatorIndex != -1) {
-            var paramsStr = window.location.href.substr(separatorIndex+1);
-            var urlValues = paramsStr.toQueryParams();
-            if (!this.values) {
-                this.values = {};
-            }
-            for (var i in urlValues) {
-                this.values[i] = urlValues[i];
-            }
-        }
 
-        this.configureForValues();
-        document.observe("dom:loaded", this.configureForValues.bind(this));
-    },
-    
-    configureForValues: function () {
-        if (this.values) {
+        // try retireve options from url
+        var separatorIndex = window.location.href.indexOf('#');
+        if (separatorIndex!=-1) {
+            var paramsStr = window.location.href.substr(separatorIndex+1);
+            this.values = paramsStr.toQueryParams();
             this.settings.each(function(element){
                 var attributeId = element.attributeId;
                 element.value = (typeof(this.values[attributeId]) == 'undefined')? '' : this.values[attributeId];
@@ -461,17 +443,15 @@ Product.Config.prototype = {
     },
 
     reloadPrice: function(){
-        var price    = 0;
-        var oldPrice = 0;
+        var price = 0;
         for(var i=this.settings.length-1;i>=0;i--){
             var selected = this.settings[i].options[this.settings[i].selectedIndex];
             if(selected.config){
-                price    += parseFloat(selected.config.price);
-                oldPrice += parseFloat(selected.config.oldPrice);
+                price += parseFloat(selected.config.price);
             }
         }
 
-        optionsPrice.changePrice('config', {'price': price, 'oldPrice': oldPrice});
+        optionsPrice.changePrice('config', price);
         optionsPrice.reload();
 
         return price;
@@ -559,7 +539,6 @@ Product.OptionsPrice.prototype = {
         this.productOldPrice    = config.productOldPrice;
         this.skipCalculate      = config.skipCalculate;
         this.duplicateIdSuffix  = config.idSuffix;
-        this.specialTaxPrice    = config.specialTaxPrice;
 
         this.oldPlusDisposition = config.oldPlusDisposition;
         this.plusDisposition    = config.plusDisposition;
@@ -567,8 +546,8 @@ Product.OptionsPrice.prototype = {
         this.oldMinusDisposition = config.oldMinusDisposition;
         this.minusDisposition    = config.minusDisposition;
 
-        this.optionPrices    = {};
-        this.containers      = {};
+        this.optionPrices = {};
+        this.containers = {};
 
         this.displayZeroPrice   = true;
 
@@ -588,32 +567,21 @@ Product.OptionsPrice.prototype = {
     },
 
     changePrice: function(key, price) {
-        this.optionPrices[key] = price;
+        this.optionPrices[key] = parseFloat(price);
     },
 
     getOptionPrices: function() {
-        var price = 0;
+        var result = 0;
         var nonTaxable = 0;
-        var oldPrice = 0;
-        var priceInclTax = 0;
-        var currentTax = this.currentTax; 
         $H(this.optionPrices).each(function(pair) {
-            if ('undefined' != typeof(pair.value.price) && 'undefined' != typeof(pair.value.oldPrice)) {
-                price += parseFloat(pair.value.price);
-                oldPrice += parseFloat(pair.value.oldPrice);
-            } else if (pair.key == 'nontaxable') {
+            if (pair.key == 'nontaxable') {
                 nonTaxable = pair.value;
-            } else if (pair.key == 'priceInclTax') {
-                priceInclTax += pair.value;
-            } else if (pair.key == 'optionsPriceInclTax') {
-                priceInclTax += pair.value * (100 + currentTax) / 100; 
             } else {
-                price += parseFloat(pair.value);
-                oldPrice += parseFloat(pair.value);
+                result += pair.value;
             }
         });
-        var result = [price, nonTaxable, oldPrice, priceInclTax];
-        return result;
+        var r = new Array(result, nonTaxable);
+        return r;
     },
 
     reload: function() {
@@ -621,10 +589,7 @@ Product.OptionsPrice.prototype = {
         var formattedPrice;
         var optionPrices = this.getOptionPrices();
         var nonTaxable = optionPrices[1];
-        var optionOldPrice = optionPrices[2];
-        var priceInclTax = optionPrices[3];
         optionPrices = optionPrices[0];
-        
         $H(this.containers).each(function(pair) {
             var _productPrice;
             var _plusDisposition;
@@ -640,18 +605,8 @@ Product.OptionsPrice.prototype = {
                     _minusDisposition = this.minusDisposition;
                 }
 
-                var price = 0;
-                if (pair.value == 'old-price-'+this.productId && optionOldPrice !== undefined) {
-                    price = optionOldPrice+parseFloat(_productPrice);
-                } else {
-                    price = optionPrices+parseFloat(_productPrice);
-                    priceInclTax += parseFloat(_productPrice) * (100 + this.currentTax) / 100;
-                }
-
-                if (this.specialTaxPrice == 'true') {
-                    var excl = price;
-                    var incl = priceInclTax;
-                } else if (this.includeTax == 'true') {
+                var price = optionPrices+parseFloat(_productPrice)
+                if (this.includeTax == 'true') {
                     // tax = tax included into product price by admin
                     var tax = price / (100 + this.defaultTax) * this.defaultTax;
                     var excl = price - tax;

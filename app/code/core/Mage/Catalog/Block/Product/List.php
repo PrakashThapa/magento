@@ -56,7 +56,7 @@ class Mage_Catalog_Block_Product_List extends Mage_Catalog_Block_Product_Abstrac
     protected function _getProductCollection()
     {
         if (is_null($this->_productCollection)) {
-            $layer = $this->getLayer();
+            $layer = Mage::getSingleton('catalog/layer');
             /* @var $layer Mage_Catalog_Model_Layer */
             if ($this->getShowRootCategory()) {
                 $this->setCategoryId(Mage::app()->getStore()->getRootCategoryId());
@@ -91,22 +91,7 @@ class Mage_Catalog_Block_Product_List extends Mage_Catalog_Block_Product_Abstrac
                 $layer->setCurrentCategory($origCategory);
             }
         }
-
         return $this->_productCollection;
-    }
-
-    /**
-     * Get catalog layer model
-     *
-     * @return Mage_Catalog_Model_Layer
-     */
-    public function getLayer()
-    {
-        $layer = Mage::registry('current_layer');
-        if ($layer) {
-            return $layer;
-        }
-        return Mage::getSingleton('catalog/layer');
     }
 
     /**
@@ -158,12 +143,12 @@ class Mage_Catalog_Block_Product_List extends Mage_Catalog_Block_Product_Abstrac
             $toolbar->setModes($modes);
         }
 
-        // set collection to toolbar and apply sort
+        // set collection to tollbar and apply sort
         $toolbar->setCollection($collection);
 
         $this->setChild('toolbar', $toolbar);
         Mage::dispatchEvent('catalog_block_product_list_collection', array(
-            'collection' => $this->_getProductCollection()
+            'collection'=>$this->_getProductCollection(),
         ));
 
         $this->_getProductCollection()->load();
@@ -185,16 +170,6 @@ class Mage_Catalog_Block_Product_List extends Mage_Catalog_Block_Product_Abstrac
         }
         $block = $this->getLayout()->createBlock($this->_defaultToolbarBlock, microtime());
         return $block;
-    }
-
-    /**
-     * Retrieve additional blocks html
-     *
-     * @return string
-     */
-    public function getAdditionalHtml()
-    {
-        return $this->getChildHtml('additional');
     }
 
     /**
@@ -255,6 +230,7 @@ class Mage_Catalog_Block_Product_List extends Mage_Catalog_Block_Product_Abstrac
                 }
             }
         }
+
 
         return $this;
     }

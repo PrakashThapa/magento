@@ -41,8 +41,7 @@ class Mage_Checkout_Block_Links extends Mage_Core_Block_Template
      */
     public function addCartLink()
     {
-        $parentBlock = $this->getParentBlock();
-        if ($parentBlock && Mage::helper('core')->isModuleOutputEnabled('Mage_Checkout')) {
+        if ($parentBlock = $this->getParentBlock()) {
             $count = $this->helper('checkout/cart')->getSummaryCount();
 
             if( $count == 1 ) {
@@ -68,9 +67,7 @@ class Mage_Checkout_Block_Links extends Mage_Core_Block_Template
         if (!$this->helper('checkout')->canOnepageCheckout()) {
             return $this;
         }
-
-        $parentBlock = $this->getParentBlock();
-        if ($parentBlock && Mage::helper('core')->isModuleOutputEnabled('Mage_Checkout')) {
+        if ($parentBlock = $this->getParentBlock()) {
             $text = $this->__('Checkout');
             $parentBlock->addLink($text, 'checkout', $text, true, array(), 60, null, 'class="top-link-checkout"');
         }

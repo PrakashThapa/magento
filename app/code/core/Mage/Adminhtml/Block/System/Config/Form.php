@@ -323,25 +323,11 @@ class Mage_Adminhtml_Block_System_Config_Form extends Mage_Adminhtml_Block_Widge
                 if ($e->depends) {
                     foreach ($e->depends->children() as $dependent) {
                         $dependentId = $section->getName() . '_' . $group->getName() . '_' . $fieldPrefix . $dependent->getName();
-                        $shouldBeAddedDependence = true;
-                        $dependentValue          = (string) $dependent;
-                        $dependentFieldName      = $fieldPrefix . $dependent->getName();
-                        $dependentField          = $group->fields->$dependentFieldName;
-                        /*
-                         * If dependent field can't be shown in current scope and real dependent config value
-                         * is not equal to preferred one, then hide dependence fields by adding dependence
-                         * based on not shown field (not rendered field)
-                         */
-                        if (!$this->_canShowField($dependentField)) {
-                            $dependentFullPath = $section->getName() . '/' . $group->getName() . '/' . $fieldPrefix . $dependent->getName();
-                            $shouldBeAddedDependence = $dependentValue != Mage::getStoreConfig($dependentFullPath, $this->getStoreCode());
-                        }
-                        if($shouldBeAddedDependence) {
-                            $this->_getDependence()
-                                ->addFieldMap($id, $id)
-                                ->addFieldMap($dependentId, $dependentId)
-                                ->addFieldDependence($id, $dependentId, $dependentValue);
-                        }
+                        $dependentValue = (string) $dependent;
+                        $this->_getDependence()
+                            ->addFieldMap($id, $id)
+                            ->addFieldMap($dependentId, $dependentId)
+                            ->addFieldDependence($id, $dependentId, $dependentValue);
                     }
                 }
 
@@ -403,19 +389,6 @@ class Mage_Adminhtml_Block_System_Config_Form extends Mage_Adminhtml_Block_Widge
             }
         }
         return $this;
-    }
-
-    /**
-     * Return config root node for current scope
-     *
-     * @return Varien_Simplexml_Element
-     */
-    public function getConfigRoot()
-    {
-        if (empty($this->_configRoot)) {
-            $this->_configRoot = Mage::getConfig()->getNode(null, $this->getScope(), $this->getScopeCode());
-        }
-        return $this->_configRoot;
     }
 
     /**
@@ -656,7 +629,6 @@ class Mage_Adminhtml_Block_System_Config_Form extends Mage_Adminhtml_Block_Widge
             'import'        => Mage::getConfig()->getBlockClassName('adminhtml/system_config_form_field_import'),
             'allowspecific' => Mage::getConfig()->getBlockClassName('adminhtml/system_config_form_field_select_allowspecific'),
             'image'         => Mage::getConfig()->getBlockClassName('adminhtml/system_config_form_field_image'),
-            'file'          => Mage::getConfig()->getBlockClassName('adminhtml/system_config_form_field_file')
         );
     }
 

@@ -182,14 +182,6 @@ class Mage_Core_Model_Config extends Mage_Core_Model_Config_Base
     private $_moduleNamespaces = null;
 
     /**
-     * Modules allowed to load
-     * If empty - all modules are allowed
-     *
-     * @var array
-     */
-    protected $_allowedModules = array();
-
-    /**
      * Class construct
      *
      * @param mixed $sourceData
@@ -688,40 +680,6 @@ class Mage_Core_Model_Config extends Mage_Core_Model_Config_Base
     }
 
     /**
-     * Add module(s) to allowed list
-     *
-     * @param  strung|array $module
-     * @return Mage_Core_Model_Config
-     */
-    public function addAllowedModules($module)
-    {
-        if (is_array($module)) {
-            foreach ($module as $moduleName) {
-                $this->addAllowedModules($moduleName);
-            }
-        } elseif (!in_array($module, $this->_allowedModules)) {
-            $this->_allowedModules[] = $module;
-        }
-
-        return $this;
-    }
-
-    /**
-     * Define if module is allowed
-     *
-     * @param  string $moduleName
-     * @return bool
-     */
-    protected function _isAllowedModule($moduleName)
-    {
-        if (empty($this->_allowedModules)) {
-            return true;
-        } else {
-            return in_array($moduleName, $this->_allowedModules);
-        }
-    }
-
-    /**
      * Load declared modules configuration
      *
      * @param   null $mergeConfig depricated
@@ -748,10 +706,6 @@ class Mage_Core_Model_Config extends Mage_Core_Model_Config_Base
 
         $moduleDepends = array();
         foreach ($unsortedConfig->getNode('modules')->children() as $moduleName => $moduleNode) {
-            if (!$this->_isAllowedModule($moduleName)) {
-                continue;
-            }
-
             $depends = array();
             if ($moduleNode->depends) {
                 foreach ($moduleNode->depends->children() as $depend) {
@@ -765,7 +719,7 @@ class Mage_Core_Model_Config extends Mage_Core_Model_Config_Base
             );
         }
 
-        // check and sort module dependence
+        // check and sort module dependens
         $moduleDepends = $this->_sortModuleDepends($moduleDepends);
 
         // create sorted config
@@ -858,23 +812,21 @@ class Mage_Core_Model_Config extends Mage_Core_Model_Config_Base
 
         $name = explode('_', strtolower($name));
         $partsNum = count($name);
-        $defaultNamespaceFlag = false;
+        $i = 0;
         foreach ($this->_moduleNamespaces as $namespaceName => $namespace) {
             // assume the namespace is omitted (default namespace only, which comes first)
-            if ($defaultNamespaceFlag === false) {
-                $defaultNamespaceFlag = true;
+            if (0 === $i) {
                 $defaultNS = $namespaceName . '_' . $name[0];
                 if (isset($namespace[$defaultNS])) {
                     return $asFullModuleName ? $namespace[$defaultNS] : $name[0]; // return omitted as well
                 }
             }
             // assume namespace is qualified
-            if(isset($name[1])) {
-                $fullNS = $name[0] . '_' . $name[1];
-                if (2 <= $partsNum && isset($namespace[$fullNS])) {
-                    return $asFullModuleName ? $namespace[$fullNS] : $fullNS;
-                }
+            $fullNS = $name[0] . '_' . $name[1];
+            if (2 <= $partsNum && isset($namespace[$fullNS])) {
+                return $asFullModuleName ? $namespace[$fullNS] : $fullNS;
             }
+            $i++;
         }
         return '';
     }
@@ -889,7 +841,7 @@ class Mage_Core_Model_Config extends Mage_Core_Model_Config_Base
      */
     public function loadModulesConfiguration($fileName, $mergeToObject = null, $mergeModel=null)
     {
-        $disableLocalModules = !$this->_canUseLocalModules();
+        $disableLocalModules    = !$this->_canUseLocalModules();
 
         if ($mergeToObject === null) {
             $mergeToObject = clone $this->_prototype;

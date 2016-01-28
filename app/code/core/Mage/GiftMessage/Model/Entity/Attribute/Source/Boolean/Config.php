@@ -28,14 +28,13 @@
 /**
  * Gift Message attribute source model
  *
- * @deprecated after 1.4.2.0
- *
  * @category    Mage
  * @package     Mage_GiftMessage
  * @author      Magento Core Team <core@magentocommerce.com>
  */
 class Mage_GiftMessage_Model_Entity_Attribute_Source_Boolean_Config extends Mage_Eav_Model_Entity_Attribute_Source_Boolean
 {
+    
     /**
      * Retrieve all attribute options
      *

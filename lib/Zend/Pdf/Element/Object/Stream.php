@@ -14,9 +14,9 @@
  *
  * @category   Zend
  * @package    Zend_Pdf
- * @copyright  Copyright (c) 2005-2010 Zend Technologies USA Inc. (http://www.zend.com)
+ * @copyright  Copyright (c) 2005-2009 Zend Technologies USA Inc. (http://www.zend.com)
  * @license    http://framework.zend.com/license/new-bsd     New BSD License
- * @version    $Id: Stream.php 22909 2010-08-27 19:57:48Z alexander $
+ * @version    $Id: Stream.php 18993 2009-11-15 17:09:16Z alexander $
  */
 
 
@@ -34,7 +34,7 @@
  *
  * @category   Zend
  * @package    Zend_Pdf
- * @copyright  Copyright (c) 2005-2010 Zend Technologies USA Inc. (http://www.zend.com)
+ * @copyright  Copyright (c) 2005-2009 Zend Technologies USA Inc. (http://www.zend.com)
  * @license    http://framework.zend.com/license/new-bsd     New BSD License
  */
 class Zend_Pdf_Element_Object_Stream extends Zend_Pdf_Element_Object
@@ -57,13 +57,13 @@ class Zend_Pdf_Element_Object_Stream extends Zend_Pdf_Element_Object
 
     /**
      * Stored original stream object dictionary.
-     * Used to decode stream at access time.
+     * Used to decode stream during an access time.
      *
-     * The only properties affecting decoding are sored here.
+     * The only properties, which affect decoding, are sored here.
      *
      * @var array|null
      */
-    private $_initialDictionaryData = null;
+    private $_originalDictionary = null;
 
     /**
      * Object constructor
@@ -91,80 +91,77 @@ class Zend_Pdf_Element_Object_Stream extends Zend_Pdf_Element_Object
 
 
     /**
-     * Extract dictionary data which are used to store information and to normalize filters
-     * information before defiltering.
+     * Store original dictionary information in $_originalDictionary class member.
+     * Used to store information and to normalize filters information before defiltering.
      *
-     * @return array
      */
-    private function _extractDictionaryData()
+    private function _storeOriginalDictionary()
     {
-        $dictionaryArray = array();
+        $this->_originalDictionary = array();
 
-        $dictionaryArray['Filter']      = array();
-        $dictionaryArray['DecodeParms'] = array();
+        $this->_originalDictionary['Filter']      = array();
+        $this->_originalDictionary['DecodeParms'] = array();
         if ($this->_dictionary->Filter === null) {
             // Do nothing.
         } else if ($this->_dictionary->Filter->getType() == Zend_Pdf_Element::TYPE_ARRAY) {
             foreach ($this->_dictionary->Filter->items as $id => $filter) {
-                $dictionaryArray['Filter'][$id]      = $filter->value;
-                $dictionaryArray['DecodeParms'][$id] = array();
+                $this->_originalDictionary['Filter'][$id]      = $filter->value;
+                $this->_originalDictionary['DecodeParms'][$id] = array();
 
                 if ($this->_dictionary->DecodeParms !== null ) {
                     if ($this->_dictionary->DecodeParms->items[$id] !== null &&
                         $this->_dictionary->DecodeParms->items[$id]->value !== null ) {
                         foreach ($this->_dictionary->DecodeParms->items[$id]->getKeys() as $paramKey) {
-                            $dictionaryArray['DecodeParms'][$id][$paramKey] =
+                            $this->_originalDictionary['DecodeParms'][$id][$paramKey] =
                                   $this->_dictionary->DecodeParms->items[$id]->$paramKey->value;
                         }
                     }
                 }
             }
         } else if ($this->_dictionary->Filter->getType() != Zend_Pdf_Element::TYPE_NULL) {
-            $dictionaryArray['Filter'][0]      = $this->_dictionary->Filter->value;
-            $dictionaryArray['DecodeParms'][0] = array();
+            $this->_originalDictionary['Filter'][0]      = $this->_dictionary->Filter->value;
+            $this->_originalDictionary['DecodeParms'][0] = array();
             if ($this->_dictionary->DecodeParms !== null ) {
                 foreach ($this->_dictionary->DecodeParms->getKeys() as $paramKey) {
-                    $dictionaryArray['DecodeParms'][0][$paramKey] =
+                    $this->_originalDictionary['DecodeParms'][0][$paramKey] =
                           $this->_dictionary->DecodeParms->$paramKey->value;
                 }
             }
         }
 
         if ($this->_dictionary->F !== null) {
-            $dictionaryArray['F'] = $this->_dictionary->F->value;
+            $this->_originalDictionary['F'] = $this->_dictionary->F->value;
         }
 
-        $dictionaryArray['FFilter']      = array();
-        $dictionaryArray['FDecodeParms'] = array();
+        $this->_originalDictionary['FFilter']      = array();
+        $this->_originalDictionary['FDecodeParms'] = array();
         if ($this->_dictionary->FFilter === null) {
             // Do nothing.
         } else if ($this->_dictionary->FFilter->getType() == Zend_Pdf_Element::TYPE_ARRAY) {
             foreach ($this->_dictionary->FFilter->items as $id => $filter) {
-                $dictionaryArray['FFilter'][$id]      = $filter->value;
-                $dictionaryArray['FDecodeParms'][$id] = array();
+                $this->_originalDictionary['FFilter'][$id]      = $filter->value;
+                $this->_originalDictionary['FDecodeParms'][$id] = array();
 
                 if ($this->_dictionary->FDecodeParms !== null ) {
                     if ($this->_dictionary->FDecodeParms->items[$id] !== null &&
                         $this->_dictionary->FDecodeParms->items[$id]->value !== null) {
                         foreach ($this->_dictionary->FDecodeParms->items[$id]->getKeys() as $paramKey) {
-                            $dictionaryArray['FDecodeParms'][$id][$paramKey] =
+                            $this->_originalDictionary['FDecodeParms'][$id][$paramKey] =
                                   $this->_dictionary->FDecodeParms->items[$id]->items[$paramKey]->value;
                         }
                     }
                 }
             }
         } else {
-            $dictionaryArray['FFilter'][0]      = $this->_dictionary->FFilter->value;
-            $dictionaryArray['FDecodeParms'][0] = array();
+            $this->_originalDictionary['FFilter'][0]      = $this->_dictionary->FFilter->value;
+            $this->_originalDictionary['FDecodeParms'][0] = array();
             if ($this->_dictionary->FDecodeParms !== null ) {
                 foreach ($this->_dictionary->FDecodeParms->getKeys() as $paramKey) {
-                    $dictionaryArray['FDecodeParms'][0][$paramKey] =
+                    $this->_originalDictionary['FDecodeParms'][0][$paramKey] =
                           $this->_dictionary->FDecodeParms->items[$paramKey]->value;
                 }
             }
         }
-
-        return $dictionaryArray;
     }
 
     /**
@@ -174,21 +171,21 @@ class Zend_Pdf_Element_Object_Stream extends Zend_Pdf_Element_Object
      */
     private function _decodeStream()
     {
-        if ($this->_initialDictionaryData === null) {
-            $this->_initialDictionaryData = $this->_extractDictionaryData();
+        if ($this->_originalDictionary === null) {
+            $this->_storeOriginalDictionary();
         }
 
         /**
          * All applied stream filters must be processed to decode stream.
          * If we don't recognize any of applied filetrs an exception should be thrown here
          */
-        if (isset($this->_initialDictionaryData['F'])) {
+        if (isset($this->_originalDictionary['F'])) {
             /** @todo Check, how external files can be processed. */
             #require_once 'Zend/Pdf/Exception.php';
             throw new Zend_Pdf_Exception('External filters are not supported now.');
         }
 
-        foreach ($this->_initialDictionaryData['Filter'] as $id => $filterName ) {
+        foreach ($this->_originalDictionary['Filter'] as $id => $filterName ) {
             $valueRef = &$this->_value->value->getRef();
             $this->_value->value->touch();
             switch ($filterName) {
@@ -205,18 +202,13 @@ class Zend_Pdf_Element_Object_Stream extends Zend_Pdf_Element_Object
                 case 'FlateDecode':
                     #require_once 'Zend/Pdf/Filter/Compression/Flate.php';
                     $valueRef = Zend_Pdf_Filter_Compression_Flate::decode($valueRef,
-                                                                          $this->_initialDictionaryData['DecodeParms'][$id]);
+                                                                          $this->_originalDictionary['DecodeParms'][$id]);
                     break;
 
                 case 'LZWDecode':
                     #require_once 'Zend/Pdf/Filter/Compression/Lzw.php';
                     $valueRef = Zend_Pdf_Filter_Compression_Lzw::decode($valueRef,
-                                                                        $this->_initialDictionaryData['DecodeParms'][$id]);
-                    break;
-
-                case 'RunLengthDecode':
-                    #require_once 'Zend/Pdf/Filter/RunLength.php';
-                    $valueRef = Zend_Pdf_Filter_RunLength::decode($valueRef);
+                                                                        $this->_originalDictionary['DecodeParms'][$id]);
                     break;
 
                 default:
@@ -239,13 +231,13 @@ class Zend_Pdf_Element_Object_Stream extends Zend_Pdf_Element_Object
          * All applied stream filters must be processed to encode stream.
          * If we don't recognize any of applied filetrs an exception should be thrown here
          */
-        if (isset($this->_initialDictionaryData['F'])) {
+        if (isset($this->_originalDictionary['F'])) {
             /** @todo Check, how external files can be processed. */
             #require_once 'Zend/Pdf/Exception.php';
             throw new Zend_Pdf_Exception('External filters are not supported now.');
         }
 
-        $filters = array_reverse($this->_initialDictionaryData['Filter'], true);
+        $filters = array_reverse($this->_originalDictionary['Filter'], true);
 
         foreach ($filters as $id => $filterName ) {
             $valueRef = &$this->_value->value->getRef();
@@ -264,21 +256,16 @@ class Zend_Pdf_Element_Object_Stream extends Zend_Pdf_Element_Object
                 case 'FlateDecode':
                     #require_once 'Zend/Pdf/Filter/Compression/Flate.php';
                     $valueRef = Zend_Pdf_Filter_Compression_Flate::encode($valueRef,
-                                                                          $this->_initialDictionaryData['DecodeParms'][$id]);
+                                                                          $this->_originalDictionary['DecodeParms'][$id]);
                     break;
 
                 case 'LZWDecode':
                     #require_once 'Zend/Pdf/Filter/Compression/Lzw.php';
                     $valueRef = Zend_Pdf_Filter_Compression_Lzw::encode($valueRef,
-                                                                        $this->_initialDictionaryData['DecodeParms'][$id]);
+                                                                        $this->_originalDictionary['DecodeParms'][$id]);
                     break;
 
-                 case 'RunLengthDecode':
-                    #require_once 'Zend/Pdf/Filter/RunLength.php';
-                    $valueRef = Zend_Pdf_Filter_RunLength::encode($valueRef);
-                    break;
-
-               default:
+                default:
                     #require_once 'Zend/Pdf/Exception.php';
                     throw new Zend_Pdf_Exception('Unknown stream filter: \'' . $filterName . '\'.');
             }
@@ -298,10 +285,10 @@ class Zend_Pdf_Element_Object_Stream extends Zend_Pdf_Element_Object
     {
         if ($property == 'dictionary') {
             /**
-             * If stream is not decoded yet, then store original decoding options (do it only once).
+             * If stream is note decoded yet, then store original decoding options (do it only once).
              */
-            if (( !$this->_streamDecoded ) && ($this->_initialDictionaryData === null)) {
-                $this->_initialDictionaryData = $this->_extractDictionaryData();
+            if (( !$this->_streamDecoded ) && ($this->_originalDictionary === null)) {
+                $this->_storeOriginalDictionary();
             }
 
             return $this->_dictionary;
@@ -377,38 +364,6 @@ class Zend_Pdf_Element_Object_Stream extends Zend_Pdf_Element_Object
     }
 
     /**
-     * Detach PDF object from the factory (if applicable), clone it and attach to new factory.
-     *
-     * @param Zend_Pdf_ElementFactory $factory  The factory to attach
-     * @param array &$processed  List of already processed indirect objects, used to avoid objects duplication
-     * @param integer $mode  Cloning mode (defines filter for objects cloning)
-     * @returns Zend_Pdf_Element
-     */
-    public function makeClone(Zend_Pdf_ElementFactory $factory, array &$processed, $mode)
-    {
-        $id = spl_object_hash($this);
-        if (isset($processed[$id])) {
-            // Do nothing if object is already processed
-            // return it
-            return $processed[$id];
-        }
-
-        $streamValue      = $this->_value;
-        $streamDictionary = $this->_dictionary->makeClone($factory, $processed, $mode);
-
-        // Make new empty instance of stream object and register it in $processed container
-        $processed[$id] = $clonedObject = $factory->newStreamObject('');
-
-        // Copy current object data and state
-        $clonedObject->_dictionary            = $this->_dictionary->makeClone($factory, $processed, $mode);
-        $clonedObject->_value                 = $this->_value->makeClone($factory, $processed, $mode);
-        $clonedObject->_initialDictionaryData = $this->_initialDictionaryData;
-        $clonedObject->_streamDecoded         = $this->_streamDecoded;
-
-        return  $clonedObject;
-    }
-
-    /**
      * Dump object to a string to save within PDF file
      *
      * $factory parameter defines operation context.
@@ -421,14 +376,18 @@ class Zend_Pdf_Element_Object_Stream extends Zend_Pdf_Element_Object
         $shift = $factory->getEnumerationShift($this->_factory);
 
         if ($this->_streamDecoded) {
-            $this->_initialDictionaryData = $this->_extractDictionaryData();
+            $this->_storeOriginalDictionary();
             $this->_encodeStream();
-        } else if ($this->_initialDictionaryData != null) {
-            $newDictionary   = $this->_extractDictionaryData();
+        } else if ($this->_originalDictionary != null) {
+            $startDictionary = $this->_originalDictionary;
+            $this->_storeOriginalDictionary();
+            $newDictionary = $this->_originalDictionary;
 
-            if ($this->_initialDictionaryData !== $newDictionary) {
+            if ($startDictionary !== $newDictionary) {
+                $this->_originalDictionary = $startDictionary;
                 $this->_decodeStream();
-                $this->_initialDictionaryData = $newDictionary;
+
+                $this->_originalDictionary = $newDictionary;
                 $this->_encodeStream();
             }
         }

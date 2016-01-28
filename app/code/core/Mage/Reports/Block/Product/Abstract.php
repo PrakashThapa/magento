@@ -111,20 +111,15 @@ abstract class Mage_Reports_Block_Product_Abstract extends Mage_Catalog_Block_Pr
                 ->addAttributeToSelect($attributes)
                 ->excludeProductIds($this->_getModel()->getExcludeProductIds())
                 ->addUrlRewrite()
+                ->setAddedAtOrder()
                 ->setPageSize($this->getPageSize())
                 ->setCurPage(1);
-
-            /* Price data is added to consider item stock status using price index */
-            $this->_collection->addPriceData();
-
             $ids = $this->getProductIds();
             if (empty($ids)) {
                 $this->_collection->addIndexFilter();
             } else {
                 $this->_collection->addFilterByIds($ids);
             }
-            $this->_collection->setAddedAtOrder();
-
             Mage::getSingleton('catalog/product_visibility')
                 ->addVisibleInSiteFilterToCollection($this->_collection);
         }

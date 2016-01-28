@@ -50,10 +50,8 @@ class Mage_Checkout_Block_Cart_Crosssell extends Mage_Catalog_Block_Product_Abst
         $items = $this->getData('items');
         if (is_null($items)) {
             $items = array();
-            $ninProductIds = $this->_getCartProductIds();
-            if ($ninProductIds) {
-                $lastAdded = (int) $this->_getLastAddedProductId();
-                if ($lastAdded) {
+            if ($ninProductIds = $this->_getCartProductIds()) {
+                if ($lastAdded = (int) $this->_getLastAddedProductId()) {
                     $collection = $this->_getCollection()
                         ->addProductFilter($lastAdded);
                     if (!empty($ninProductIds)) {
@@ -68,9 +66,8 @@ class Mage_Checkout_Block_Cart_Crosssell extends Mage_Catalog_Block_Product_Abst
                 }
 
                 if (count($items)<$this->_maxItemCount) {
-                    $filterProductIds = array_merge($this->_getCartProductIds(), $this->_getCartProductIdsRel());
                     $collection = $this->_getCollection()
-                        ->addProductFilter($filterProductIds)
+                        ->addProductFilter($this->_getCartProductIds())
                         ->addExcludeProductFilter($ninProductIds)
                         ->setPageSize($this->_maxItemCount-count($items))
                         ->setGroupBy()
@@ -115,28 +112,6 @@ class Mage_Checkout_Block_Cart_Crosssell extends Mage_Catalog_Block_Product_Abst
             $this->setData('_cart_product_ids', $ids);
         }
         return $ids;
-    }
-
-    /**
-     * Retrieve Array of product ids which have special relation with products in Cart
-     * For example simple product as part of Grouped product
-     *
-     * @return array
-     */
-    protected function _getCartProductIdsRel()
-    {
-        $productIds = array();
-        foreach ($this->getQuote()->getAllItems() as $quoteItem) {
-            $productTypeOpt = $quoteItem->getOptionByCode('product_type');
-            if ($productTypeOpt instanceof Mage_Sales_Model_Quote_Item_Option
-                && $productTypeOpt->getValue() == Mage_Catalog_Model_Product_Type_Grouped::TYPE_CODE
-                && $productTypeOpt->getProductId()
-            ) {
-                $productIds[] = $productTypeOpt->getProductId();
-            }
-        }
-
-        return $productIds;
     }
 
     /**

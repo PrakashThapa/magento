@@ -43,9 +43,6 @@ class Mage_Core_Model_Locale
      */
     const XML_PATH_DEFAULT_LOCALE   = 'general/locale/code';
     const XML_PATH_DEFAULT_TIMEZONE = 'general/locale/timezone';
-    /**
-     * @deprecated since 1.4.1.0
-     */
     const XML_PATH_DEFAULT_COUNTRY  = 'general/country/default';
     const XML_PATH_ALLOW_CODES      = 'global/locale/allow/codes';
     const XML_PATH_ALLOW_CURRENCIES = 'global/locale/allow/currencies';
@@ -199,7 +196,6 @@ class Mage_Core_Model_Locale
     public function setLocaleCode($code)
     {
         $this->_localeCode = $code;
-        $this->_locale = null;
         return $this;
     }
 

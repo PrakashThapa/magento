@@ -51,7 +51,6 @@ class Mage_SalesRule_Model_Quote_Discount extends Mage_Sales_Model_Quote_Address
         parent::collect($address);
         $quote = $address->getQuote();
         $store = Mage::app()->getStore($quote->getStoreId());
-        $this->_calculator->reset($address);
 
         $items = $this->_getAddressItems($address);
         if (!count($items)) {
@@ -65,8 +64,6 @@ class Mage_SalesRule_Model_Quote_Discount extends Mage_Sales_Model_Quote_Address
         );
 
         $this->_calculator->init($store->getWebsiteId(), $quote->getCustomerGroupId(), $quote->getCouponCode());
-        $this->_calculator->initTotals($items, $address);
-
         $address->setDiscountDescription(array());
 
         foreach ($items as $item) {

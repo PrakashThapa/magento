@@ -40,13 +40,6 @@ class Mage_Checkout_OnepageController extends Mage_Checkout_Controller_Action
     {
         parent::preDispatch();
         $this->_preDispatchValidateCustomer();
-
-        $checkoutSessionQuote = Mage::getSingleton('checkout/session')->getQuote();
-        if ($checkoutSessionQuote->getIsMultiShipping()) {
-            $checkoutSessionQuote->setIsMultiShipping(false);
-            $checkoutSessionQuote->removeAllAddresses();
-        }
-
         return $this;
     }
 
@@ -227,7 +220,7 @@ class Mage_Checkout_OnepageController extends Mage_Checkout_Controller_Action
         $session->clear();
         $this->loadLayout();
         $this->_initLayoutMessages('checkout/session');
-        Mage::dispatchEvent('checkout_onepage_controller_success_action', array('order_ids' => array($lastOrderId)));
+        Mage::dispatchEvent('checkout_onepage_controller_success_action');
         $this->renderLayout();
     }
 
@@ -296,9 +289,8 @@ class Mage_Checkout_OnepageController extends Mage_Checkout_Controller_Action
             return;
         }
         if ($this->getRequest()->isPost()) {
-//            $postData = $this->getRequest()->getPost('billing', array());
-//            $data = $this->_filterPostData($postData);
-            $data = $this->getRequest()->getPost('billing', array());
+            $postData = $this->getRequest()->getPost('billing', array());
+            $data = $this->_filterPostData($postData);
             $customerAddressId = $this->getRequest()->getPost('billing_address_id', false);
 
             if (isset($data['email'])) {
@@ -460,16 +452,6 @@ class Mage_Checkout_OnepageController extends Mage_Checkout_Controller_Action
             $redirectUrl = $this->getOnepage()->getCheckout()->getRedirectUrl();
             $result['success'] = true;
             $result['error']   = false;
-        } catch (Mage_Payment_Model_Info_Exception $e) {
-            $message = $e->getMessage();
-            if( !empty($message) ) {
-                $result['error_messages'] = $message;
-            }
-            $result['goto_section'] = 'payment';
-            $result['update_section'] = array(
-                'name' => 'payment-method',
-                'html' => $this->_getPaymentMethodsHtml()
-            );
         } catch (Mage_Core_Exception $e) {
             Mage::logException($e);
             Mage::helper('checkout')->sendPaymentFailedEmail($this->getOnepage()->getQuote(), $e->getMessage());

@@ -275,22 +275,12 @@ class Mage_Sales_Model_Order_Shipment extends Mage_Sales_Model_Abstract
         return $this;
     }
 
-    /**
-     * Adds comment to shipment with additional possibility to send it to customer via email
-     * and show it in customer account
-     *
-     * @param bool $notify
-     * @param bool $visibleOnFront
-     *
-     * @return Mage_Sales_Model_Order_Shipment
-     */
-    public function addComment($comment, $notify=false, $visibleOnFront=false)
+    public function addComment($comment, $notify=false)
     {
         if (!($comment instanceof Mage_Sales_Model_Order_Shipment_Comment)) {
             $comment = Mage::getModel('sales/order_shipment_comment')
                 ->setComment($comment)
-                ->setIsCustomerNotified($notify)
-                ->setIsVisibleOnFront($visibleOnFront);
+                ->setIsCustomerNotified($notify);
         }
         $comment->setShipment($this)
             ->setParentId($this->getId())
@@ -323,161 +313,171 @@ class Mage_Sales_Model_Order_Shipment extends Mage_Sales_Model_Abstract
     }
 
     /**
-     * Send email with shipment data
+     * Sending email with Invoice data
      *
-     * @param boolean $notifyCustomer
-     * @param string $comment
-     * @return Mage_Sales_Model_Order_Shipment
+     * @return Mage_Sales_Model_Order_Invoice
      */
-    public function sendEmail($notifyCustomer = true, $comment = '')
+    public function sendEmail($notifyCustomer=true, $comment='')
     {
-        $order = $this->getOrder();
-        $storeId = $order->getStore()->getId();
-
-        if (!Mage::helper('sales')->canSendNewShipmentEmail($storeId)) {
+        if (!Mage::helper('sales')->canSendNewShipmentEmail($this->getOrder()->getStore()->getId())) {
             return $this;
         }
-        // Get the destination email addresses to send copies to
+
+        $currentDesign = Mage::getDesign()->setAllGetOld(array(
+            'package' => Mage::getStoreConfig('design/package/name', $this->getStoreId()),
+            'store' => $this->getStoreId()
+        ));
+
+        $translate = Mage::getSingleton('core/translate');
+        /* @var $translate Mage_Core_Model_Translate */
+        $translate->setTranslateInline(false);
+
+        $order  = $this->getOrder();
         $copyTo = $this->_getEmails(self::XML_PATH_EMAIL_COPY_TO);
-        $copyMethod = Mage::getStoreConfig(self::XML_PATH_EMAIL_COPY_METHOD, $storeId);
-        // Check if at least one recepient is found
+        $copyMethod = Mage::getStoreConfig(self::XML_PATH_EMAIL_COPY_METHOD, $this->getStoreId());
+
         if (!$notifyCustomer && !$copyTo) {
             return $this;
         }
+        $paymentBlock   = Mage::helper('payment')->getInfoBlock($order->getPayment())
+            ->setIsSecureMode(true);
+        $paymentBlock->getMethod()->setStore($order->getStore()->getId());
 
-        // Start store emulation process
-        $appEmulation = Mage::getSingleton('core/app_emulation');
-        $initialEnvironmentInfo = $appEmulation->startEnvironmentEmulation($storeId);
+        $mailTemplate = Mage::getModel('core/email_template');
 
-        try {
-            // Retrieve specified view block from appropriate design package (depends on emulated store)
-            $paymentBlock = Mage::helper('payment')->getInfoBlock($order->getPayment())
-                ->setIsSecureMode(true);
-            $paymentBlock->getMethod()->setStore($storeId);
-            $paymentBlockHtml = $paymentBlock->toHtml();
-        } catch (Exception $exception) {
-            // Stop store emulation process
-            $appEmulation->stopEnvironmentEmulation($initialEnvironmentInfo);
-            throw $exception;
-        }
-
-        // Stop store emulation process
-        $appEmulation->stopEnvironmentEmulation($initialEnvironmentInfo);
-
-        // Retrieve corresponding email template id and customer name
         if ($order->getCustomerIsGuest()) {
-            $templateId = Mage::getStoreConfig(self::XML_PATH_EMAIL_GUEST_TEMPLATE, $storeId);
+            $template = Mage::getStoreConfig(self::XML_PATH_EMAIL_GUEST_TEMPLATE, $order->getStoreId());
             $customerName = $order->getBillingAddress()->getName();
         } else {
-            $templateId = Mage::getStoreConfig(self::XML_PATH_EMAIL_TEMPLATE, $storeId);
+            $template = Mage::getStoreConfig(self::XML_PATH_EMAIL_TEMPLATE, $order->getStoreId());
             $customerName = $order->getCustomerName();
         }
 
-        $mailer = Mage::getModel('core/email_template_mailer');
         if ($notifyCustomer) {
-            $emailInfo = Mage::getModel('core/email_info');
-            $emailInfo->addTo($order->getCustomerEmail(), $customerName);
+            $sendTo[] = array(
+                'name'  => $customerName,
+                'email' => $order->getCustomerEmail()
+            );
             if ($copyTo && $copyMethod == 'bcc') {
-                // Add bcc to customer email
                 foreach ($copyTo as $email) {
-                    $emailInfo->addBcc($email);
+                    $mailTemplate->addBcc($email);
                 }
             }
-            $mailer->addEmailInfo($emailInfo);
+
         }
 
-        // Email copies are sent as separated emails if their copy method is 'copy' or a customer should not be notified
         if ($copyTo && ($copyMethod == 'copy' || !$notifyCustomer)) {
             foreach ($copyTo as $email) {
-                $emailInfo = Mage::getModel('core/email_info');
-                $emailInfo->addTo($email);
-                $mailer->addEmailInfo($emailInfo);
+                $sendTo[] = array(
+                    'name'  => null,
+                    'email' => $email
+                );
             }
         }
 
-        // Set all required params and send emails
-        $mailer->setSender(Mage::getStoreConfig(self::XML_PATH_EMAIL_IDENTITY, $storeId));
-        $mailer->setStoreId($storeId);
-        $mailer->setTemplateId($templateId);
-        $mailer->setTemplateParams(array(
-                'order'        => $order,
-                'shipment'     => $this,
-                'comment'      => $comment,
-                'billing'      => $order->getBillingAddress(),
-                'payment_html' => $paymentBlockHtml
-            )
-        );
-        $mailer->send();
+        foreach ($sendTo as $recipient) {
+            $mailTemplate->setDesignConfig(array('area'=>'frontend', 'store'=>$order->getStoreId()))
+                ->sendTransactional(
+                    $template,
+                    Mage::getStoreConfig(self::XML_PATH_EMAIL_IDENTITY, $order->getStoreId()),
+                    $recipient['email'],
+                    $recipient['name'],
+                    array(
+                        'order'       => $order,
+                        'shipment'    => $this,
+                        'comment'     => $comment,
+                        'billing'     => $order->getBillingAddress(),
+                        'payment_html'=> $paymentBlock->toHtml(),
+                    )
+                );
+        }
+
+        $translate->setTranslateInline(true);
+
+        Mage::getDesign()->setAllGetOld($currentDesign);
 
         return $this;
     }
 
     /**
-     * Send email with shipment update information
+     * Sending email with Shipment update information
      *
-     * @param boolean $notifyCustomer
-     * @param string $comment
      * @return Mage_Sales_Model_Order_Shipment
      */
-    public function sendUpdateEmail($notifyCustomer = true, $comment = '')
+    public function sendUpdateEmail($notifyCustomer = true, $comment='')
     {
-        $order = $this->getOrder();
-        $storeId = $order->getStore()->getId();
-
-        if (!Mage::helper('sales')->canSendShipmentCommentEmail($storeId)) {
+        if (!Mage::helper('sales')->canSendShipmentCommentEmail($this->getOrder()->getStore()->getId())) {
             return $this;
         }
-        // Get the destination email addresses to send copies to
+
+        $currentDesign = Mage::getDesign()->setAllGetOld(array(
+            'package' => Mage::getStoreConfig('design/package/name', $this->getStoreId()),
+        ));
+
+        $translate = Mage::getSingleton('core/translate');
+        /* @var $translate Mage_Core_Model_Translate */
+        $translate->setTranslateInline(false);
+
+        $order  = $this->getOrder();
+
         $copyTo = $this->_getEmails(self::XML_PATH_UPDATE_EMAIL_COPY_TO);
-        $copyMethod = Mage::getStoreConfig(self::XML_PATH_UPDATE_EMAIL_COPY_METHOD, $storeId);
-        // Check if at least one recepient is found
+        $copyMethod = Mage::getStoreConfig(self::XML_PATH_UPDATE_EMAIL_COPY_METHOD, $this->getStoreId());
+
         if (!$notifyCustomer && !$copyTo) {
             return $this;
         }
 
-        // Retrieve corresponding email template id and customer name
+        $mailTemplate = Mage::getModel('core/email_template');
+
         if ($order->getCustomerIsGuest()) {
-            $templateId = Mage::getStoreConfig(self::XML_PATH_UPDATE_EMAIL_GUEST_TEMPLATE, $storeId);
+            $template = Mage::getStoreConfig(self::XML_PATH_UPDATE_EMAIL_GUEST_TEMPLATE, $order->getStoreId());
             $customerName = $order->getBillingAddress()->getName();
         } else {
-            $templateId = Mage::getStoreConfig(self::XML_PATH_UPDATE_EMAIL_TEMPLATE, $storeId);
+            $template = Mage::getStoreConfig(self::XML_PATH_UPDATE_EMAIL_TEMPLATE, $order->getStoreId());
             $customerName = $order->getCustomerName();
         }
 
-        $mailer = Mage::getModel('core/email_template_mailer');
         if ($notifyCustomer) {
-            $emailInfo = Mage::getModel('core/email_info');
-            $emailInfo->addTo($order->getCustomerEmail(), $customerName);
+            $sendTo[] = array(
+                'name'  => $customerName,
+                'email' => $order->getCustomerEmail()
+            );
             if ($copyTo && $copyMethod == 'bcc') {
-                // Add bcc to customer email
                 foreach ($copyTo as $email) {
-                    $emailInfo->addBcc($email);
+                    $mailTemplate->addBcc($email);
                 }
             }
-            $mailer->addEmailInfo($emailInfo);
+
         }
 
-        // Email copies are sent as separated emails if their copy method is 'copy' or a customer should not be notified
         if ($copyTo && ($copyMethod == 'copy' || !$notifyCustomer)) {
             foreach ($copyTo as $email) {
-                $emailInfo = Mage::getModel('core/email_info');
-                $emailInfo->addTo($email);
-                $mailer->addEmailInfo($emailInfo);
+                $sendTo[] = array(
+                    'name'  => null,
+                    'email' => $email
+                );
             }
         }
 
-        // Set all required params and send emails
-        $mailer->setSender(Mage::getStoreConfig(self::XML_PATH_UPDATE_EMAIL_IDENTITY, $storeId));
-        $mailer->setStoreId($storeId);
-        $mailer->setTemplateId($templateId);
-        $mailer->setTemplateParams(array(
-                'order'    => $order,
-                'shipment' => $this,
-                'comment'  => $comment,
-                'billing'  => $order->getBillingAddress()
-            )
-        );
-        $mailer->send();
+        foreach ($sendTo as $recipient) {
+            $mailTemplate->setDesignConfig(array('area'=>'frontend', 'store'=>$order->getStoreId()))
+                ->sendTransactional(
+                    $template,
+                    Mage::getStoreConfig(self::XML_PATH_UPDATE_EMAIL_IDENTITY, $order->getStoreId()),
+                    $recipient['email'],
+                    $recipient['name'],
+                    array(
+                        'order'   => $order,
+                        'billing' => $order->getBillingAddress(),
+                        'shipment'=> $this,
+                        'comment' => $comment
+                    )
+                );
+        }
+
+        $translate->setTranslateInline(true);
+
+        Mage::getDesign()->setAllGetOld($currentDesign);
 
         return $this;
     }

@@ -63,18 +63,11 @@ abstract class Mage_Catalog_Model_Product_Type_Abstract
     protected $_editableAttributes;
 
     /**
-     * Is a composite product type
+     * Is a compotite product type
      *
      * @var bool
      */
     protected $_isComposite = false;
-
-    /**
-     * Is a configurable product type
-     *
-     * @var bool
-     */
-    protected $_canConfigure = false;
 
     /**
      * Whether product quantity is fractional number or not
@@ -90,13 +83,6 @@ abstract class Mage_Catalog_Model_Product_Type_Abstract
      */
     protected $_storeFilter     = null;
 
-    /**
-     * File queue array
-     *
-     * @var array
-     */
-    protected $_fileQueue       = array();
-
     const CALCULATE_CHILD = 0;
     const CALCULATE_PARENT = 1;
 
@@ -106,12 +92,6 @@ abstract class Mage_Catalog_Model_Product_Type_Abstract
      */
     const SHIPMENT_SEPARATELY = 1;
     const SHIPMENT_TOGETHER = 0;
-
-    /**
-     * Process modes
-     */
-    const PROCESS_MODE_FULL = 'full'; // Full validation - all required options must be set, whole configuration must be valid
-    const PROCESS_MODE_LITE = 'lite'; // Lite validation - only received options are validated
 
     /**
      * Specify type instance product
@@ -291,21 +271,19 @@ abstract class Mage_Catalog_Model_Product_Type_Abstract
     }
 
     /**
-     * Prepare product and its configuration to be added to some products list.
-     * Perform standard preparation process and then prepare options belonging to specific product type.
+     * Initialize product(s) for add to cart process
      *
-     * @param  Varien_Object $buyRequest
-     * @param  Mage_Catalog_Model_Product $product
-     * @param  string $processMode
-     * @return array|string
+     * @param   Varien_Object $buyRequest
+     * @param Mage_Catalog_Model_Product $product
+     * @return  array|string
      */
-    protected function _prepareProduct(Varien_Object $buyRequest, $product, $processMode)
+    public function prepareForCart(Varien_Object $buyRequest, $product = null)
     {
         $product = $this->getProduct($product);
         /* @var Mage_Catalog_Model_Product $product */
         // try to add custom options
         try {
-            $options = $this->_prepareOptions($buyRequest, $product, $processMode);
+            $options = $this->_prepareOptionsForCart($buyRequest, $product);
         } catch (Mage_Core_Exception $e) {
             return $e->getMessage();
         }
@@ -317,8 +295,7 @@ abstract class Mage_Catalog_Model_Product_Type_Abstract
         // (if product was buying within grouped product)
         $superProductConfig = $buyRequest->getSuperProductConfig();
         if (!empty($superProductConfig['product_id'])
-            && !empty($superProductConfig['product_type'])
-        ) {
+            && !empty($superProductConfig['product_type'])) {
             $superProductId = (int) $superProductConfig['product_id'];
             if ($superProductId) {
                 if (!$superProduct = Mage::registry('used_super_product_'.$superProductId)) {
@@ -332,16 +309,15 @@ abstract class Mage_Catalog_Model_Product_Type_Abstract
                         $product->addCustomOption('product_type', $productType, $superProduct);
 
                         $buyRequest->setData('super_product_config', array(
-                            'product_type' => $productType,
-                            'product_id'   => $superProduct->getId()
-                        ));
+                                'product_type'  => $productType,
+                                'product_id'    => $superProduct->getId()
+                            )
+                        );
                     }
                 }
             }
         }
 
-        $product->prepareCustomOptions();
-        $buyRequest->unsetData('_processing_params'); // One-time params only
         $product->addCustomOption('info_buyRequest', serialize($buyRequest->getData()));
 
         if ($options) {
@@ -353,133 +329,9 @@ abstract class Mage_Catalog_Model_Product_Type_Abstract
         }
 
         // set quantity in cart
-        if ($this->_isStrictProcessMode($processMode)) {
-            $product->setCartQty($buyRequest->getQty());
-        }
-        $product->setQty($buyRequest->getQty());
+        $product->setCartQty($buyRequest->getQty());
 
         return array($product);
-    }
-
-    /**
-     * Process product configuaration
-     *
-     * @param Varien_Object $buyRequest
-     * @param Mage_Catalog_Model_Product $product
-     * @param string $processMode
-     * @return array|string
-     */
-    public function processConfiguration(Varien_Object $buyRequest, $product = null, $processMode = self::PROCESS_MODE_LITE)
-    {
-        $_products = $this->_prepareProduct($buyRequest, $product, $processMode);
-
-        $this->processFileQueue();
-
-        return $_products;
-    }
-
-    /**
-     * Initialize product(s) for add to cart process.
-     * Advanced version of func to prepare product for cart - processMode can be specified there.
-     *
-     * @param Varien_Object $buyRequest
-     * @param Mage_Catalog_Model_Product $product
-     * @param null|string $processMode
-     * @return array|string
-     */
-    public function prepareForCartAdvanced(Varien_Object $buyRequest, $product = null, $processMode = null)
-    {
-        if (!$processMode) {
-            $processMode = self::PROCESS_MODE_FULL;
-        }
-        $_products = $this->_prepareProduct($buyRequest, $product, $processMode);
-        $this->processFileQueue();
-        return $_products;
-    }
-
-    /**
-     * Initialize product(s) for add to cart process
-     *
-     * @param Varien_Object $buyRequest
-     * @param Mage_Catalog_Model_Product $product
-     * @return array|string
-     */
-    public function prepareForCart(Varien_Object $buyRequest, $product = null)
-    {
-        return $this->prepareForCartAdvanced($buyRequest, $product, self::PROCESS_MODE_FULL);
-    }
-
-    /**
-     * Process File Queue
-     * @return Mage_Catalog_Model_Product_Type_Abstract
-     */
-    public function processFileQueue()
-    {
-        if (empty ($this->_fileQueue)) {
-            return $this;
-        }
-
-        foreach ($this->_fileQueue as &$queueOptions) {
-            if (isset($queueOptions['operation']) && $operation = $queueOptions['operation']) {
-                switch ($operation) {
-                    case 'receive_uploaded_file':
-                        $src = isset($queueOptions['src_name']) ? $queueOptions['src_name'] : '';
-                        $dst = isset($queueOptions['dst_name']) ? $queueOptions['dst_name'] : '';
-                        $uploader = isset($queueOptions['uploader']) ? $queueOptions['uploader'] : null;
-
-                        $path = dirname($dst);
-                        $io = new Varien_Io_File();
-                        if (!$io->isWriteable($path) && !$io->mkdir($path, 0777, true)) {
-                            Mage::throwException(Mage::helper('catalog')->__("Cannot create writeable directory '%s'.", $path));
-                        }
-
-                        $uploader->setDestination($path);
-
-                        if (empty($src) || empty($dst) || !$uploader->receive($src)) {
-                            /**
-                             * @todo: show invalid option
-                             */
-                            if (isset($queueOptions['option'])) {
-                                $queueOptions['option']->setIsValid(false);
-                            }
-                            Mage::throwException(Mage::helper('catalog')->__("File upload failed"));
-                        }
-                        Mage::helper('core/file_storage_database')->saveFile($dst);
-                        break;
-                    case 'move_uploaded_file':
-                        $src = $queueOptions['src_name'];
-                        $dst = $queueOptions['dst_name'];
-                        move_uploaded_file($src, $dst);
-                        Mage::helper('core/file_storage_database')->saveFile($dst);
-                        break;
-                    default:
-                        break;
-                }
-            }
-            $queueOptions = null;
-        }
-
-        return $this;
-    }
-
-    /**
-     * Add file to File Queue
-     * @param array $queueOptions Array of File Queue (eg. ['operation'=>'move', 'src_name'=>'filename', 'dst_name'=>'filename2'])
-     */
-    public function addFileQueue($queueOptions)
-    {
-        $this->_fileQueue[] = $queueOptions;
-    }
-
-    /**
-     * Check if current process mode is strict
-     *
-     * @param string $processMode
-     * @return bool
-     */
-    protected function _isStrictProcessMode($processMode)
-    {
-        return $processMode == self::PROCESS_MODE_FULL;
     }
 
     /**
@@ -493,14 +345,13 @@ abstract class Mage_Catalog_Model_Product_Type_Abstract
     }
 
     /**
-     * Process custom defined options for product
+     * Check custom defined options for product
      *
      * @param Varien_Object $buyRequest
      * @param Mage_Catalog_Model_Product $product
-     * @param string $processMode
-     * @return array
+     * @return  array || string
      */
-    protected function _prepareOptions(Varien_Object $buyRequest, $product, $processMode)
+    protected function _prepareOptionsForCart(Varien_Object $buyRequest, $product = null)
     {
         $transport = new StdClass;
         $transport->options = array();
@@ -510,7 +361,6 @@ abstract class Mage_Catalog_Model_Product_Type_Abstract
                 ->setOption($_option)
                 ->setProduct($this->getProduct($product))
                 ->setRequest($buyRequest)
-                ->setProcessMode($processMode)
                 ->validateUserValue($buyRequest->getOptions());
 
             $preparedValue = $group->prepareForCart();
@@ -518,35 +368,16 @@ abstract class Mage_Catalog_Model_Product_Type_Abstract
                 $transport->options[$_option->getId()] = $preparedValue;
             }
         }
-
-        $eventName = sprintf('catalog_product_type_prepare_%s_options', $processMode);
-        Mage::dispatchEvent($eventName, array(
-            'transport'   => $transport,
-            'buy_request' => $buyRequest,
-            'product' => $product
+        Mage::dispatchEvent('catalog_product_type_prepare_cart_options', array(
+            'transport' => $transport, 'buy_request' => $buyRequest, 'product' => $product
         ));
         return $transport->options;
     }
 
     /**
-     * Process product custom defined options for cart
-     *
-     * @deprecated after 1.4.2.0
-     * @see _prepareOptions()
-     *
-     * @param Varien_Object $buyRequest
-     * @param Mage_Catalog_Model_Product $product
-     * @return array
-     */
-    protected function _prepareOptionsForCart(Varien_Object $buyRequest, $product = null)
-    {
-        return $this->_prepareOptions($buyRequest, $product, self::PROCESS_MODE_FULL);
-    }
-
-    /**
      * Check if product can be bought
      *
-     * @param  Mage_Catalog_Model_Product $product
+     * @param Mage_Catalog_Model_Product $product
      * @return Mage_Catalog_Model_Product_Type_Abstract
      * @throws Mage_Core_Exception
      */
@@ -556,10 +387,10 @@ abstract class Mage_Catalog_Model_Product_Type_Abstract
             foreach ($this->getProduct($product)->getOptions() as $option) {
                 if ($option->getIsRequire() && (!$this->getProduct($product)->getCustomOption('option_'.$option->getId())
                 || strlen($this->getProduct($product)->getCustomOption('option_'.$option->getId())->getValue()) == 0)) {
-                    $this->getProduct($product)->setSkipCheckRequiredOption(true);
                     Mage::throwException(
                         Mage::helper('catalog')->__('The product has required options')
                     );
+                    break;
                 }
             }
         }
@@ -585,20 +416,20 @@ abstract class Mage_Catalog_Model_Product_Type_Abstract
             foreach (explode(',', $optionIds->getValue()) as $optionId) {
                 if ($option = $this->getProduct($product)->getOptionById($optionId)) {
 
-                    $confItemOption = $this->getProduct($product)->getCustomOption('option_'.$option->getId());
+                    $quoteItemOption = $this->getProduct($product)->getCustomOption('option_'.$option->getId());
 
                     $group = $option->groupFactory($option->getType())
                         ->setOption($option)
                         ->setProduct($this->getProduct())
-                        ->setConfigurationItemOption($confItemOption);
+                        ->setQuoteItemOption($quoteItemOption);
 
                     $optionArr['options'][] = array(
                         'label' => $option->getTitle(),
-                        'value' => $group->getFormattedOptionValue($confItemOption->getValue()),
-                        'print_value' => $group->getPrintableOptionValue($confItemOption->getValue()),
+                        'value' => $group->getFormattedOptionValue($quoteItemOption->getValue()),
+                        'print_value' => $group->getPrintableOptionValue($quoteItemOption->getValue()),
                         'option_id' => $option->getId(),
                         'option_type' => $option->getType(),
-                        'option_value' => $confItemOption->getValue(),
+                        'option_value' => $quoteItemOption->getValue(),
                         'custom_view' => $group->isCustomizedView()
                     );
                 }
@@ -628,25 +459,6 @@ abstract class Mage_Catalog_Model_Product_Type_Abstract
     }
 
     /**
-     * Remove don't applicable attributes data
-     *
-     * @param Mage_Catalog_Model_Product $product
-     */
-    protected function _removeNotApplicableAttributes($product = null)
-    {
-        $product    = $this->getProduct($product);
-        $eavConfig  = Mage::getSingleton('eav/config');
-        $entityType = $product->getResource()->getEntityType();
-        foreach ($eavConfig->getEntityAttributeCodes($entityType, $product) as $attributeCode) {
-            $attribute = $eavConfig->getAttribute($entityType, $attributeCode);
-            $applyTo   = $attribute->getApplyTo();
-            if (is_array($applyTo) && count($applyTo) > 0 && !in_array($product->getTypeId(), $applyTo)) {
-                $product->unsetData($attribute->getAttributeCode());
-            }
-        }
-    }
-
-    /**
      * Before save type related data
      *
      * @param Mage_Catalog_Model_Product $product
@@ -654,7 +466,6 @@ abstract class Mage_Catalog_Model_Product_Type_Abstract
      */
     public function beforeSave($product = null)
     {
-        $this->_removeNotApplicableAttributes($product);
         $this->getProduct($product)->canAffectOptions(true);
         return $this;
     }
@@ -668,17 +479,6 @@ abstract class Mage_Catalog_Model_Product_Type_Abstract
     public function isComposite($product = null)
     {
         return $this->_isComposite;
-    }
-
-    /**
-     * Check if product is configurable
-     *
-     * @param Mage_Catalog_Model_Product $product
-     * @return bool
-     */
-    public function canConfigure($product = null)
-    {
-        return $this->_canConfigure;
     }
 
     /**
@@ -700,36 +500,18 @@ abstract class Mage_Catalog_Model_Product_Type_Abstract
      */
     public function getSku($product = null)
     {
-        $sku = $this->getProduct($product)->getData('sku');
-        if ($this->getProduct($product)->getCustomOption('option_ids')) {
-            $sku = $this->getOptionSku($product,$sku);
-        }
-        return $sku;
-    }
-
-    /**
-     * Default action to get sku of product with option
-     *
-     * @param Mage_Catalog_Model_Product $product Product with Custom Options
-     * @param string $sku Product SKU without option
-     * @return string
-     */
-    public function getOptionSku($product = null, $sku='')
-    {
         $skuDelimiter = '-';
-        if(empty($sku)){
-            $sku = $this->getProduct($product)->getData('sku');
-        }
+        $sku = $this->getProduct($product)->getData('sku');
         if ($optionIds = $this->getProduct($product)->getCustomOption('option_ids')) {
             foreach (explode(',', $optionIds->getValue()) as $optionId) {
                 if ($option = $this->getProduct($product)->getOptionById($optionId)) {
 
-                    $confItemOption = $this->getProduct($product)->getCustomOption('option_'.$optionId);
+                    $quoteItemOption = $this->getProduct($product)->getCustomOption('option_'.$optionId);
 
                     $group = $option->groupFactory($option->getType())
                         ->setOption($option)->setListener(new Varien_Object());
-                    
-                    if ($optionSku = $group->getOptionSku($confItemOption->getValue(), $skuDelimiter)) {
+
+                    if ($optionSku = $group->getOptionSku($quoteItemOption->getValue(), $skuDelimiter)) {
                         $sku .= $skuDelimiter . $optionSku;
                     }
 
@@ -746,6 +528,7 @@ abstract class Mage_Catalog_Model_Product_Type_Abstract
         }
         return $sku;
     }
+
     /**
      * Default action to get weight of product
      *
@@ -775,10 +558,10 @@ abstract class Mage_Catalog_Model_Product_Type_Abstract
     }
 
     /**
-     * Method is needed for specific actions to change given configuration options values
+     * Method is needed for specific actions to change given quote options values
      * according current product type logic
      * Example: the cataloginventory validation of decimal qty can change qty to int,
-     * so need to change configuration item qty option value too.
+     * so need to change quote item qty option value too.
      *
      * @param array         $options
      * @param Varien_Object $option
@@ -923,49 +706,5 @@ abstract class Mage_Catalog_Model_Product_Type_Abstract
             return array();
         }
         return array(array($product));
-    }
-
-    /**
-     * Prepare selected options for product
-     *
-     * @param  Mage_Catalog_Model_Product $product
-     * @param  Varien_Object $buyRequest
-     * @return array
-     */
-    public function processBuyRequest($product, $buyRequest)
-    {
-        return array();
-    }
-
-    /**
-     * Check product's options configuration
-     *
-     * @param  Mage_Catalog_Model_Product $product
-     * @param  Varien_Object $buyRequest
-     * @return array
-     */
-    public function checkProductConfiguration($product, $buyRequest)
-    {
-        $errors = array();
-
-        try {
-            /**
-             * cloning product because prepareForCart() method will modify it
-             */
-            $productForCheck = clone $product;
-            $buyRequestForCheck = clone $buyRequest;
-            $result = $this->prepareForCart($buyRequestForCheck, $productForCheck);
-
-            if (is_string($result)) {
-               $errors[] = $result;
-            }
-        } catch (Mage_Core_Exception $e) {
-            $errors[] = $e->getMessages();
-        } catch (Exception $e) {
-            Mage::logException($e);
-            $errors[] = Mage::helper('catalog')->__('There was an error while request processing.');
-        }
-
-        return $errors;
     }
 }

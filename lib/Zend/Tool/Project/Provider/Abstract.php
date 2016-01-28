@@ -15,9 +15,9 @@
  * @category   Zend
  * @package    Zend_Tool
  * @subpackage Framework
- * @copyright  Copyright (c) 2005-2010 Zend Technologies USA Inc. (http://www.zend.com)
+ * @copyright  Copyright (c) 2005-2009 Zend Technologies USA Inc. (http://www.zend.com)
  * @license    http://framework.zend.com/license/new-bsd     New BSD License
- * @version    $Id: Abstract.php 23202 2010-10-21 15:08:15Z ralph $
+ * @version    $Id: Abstract.php 18951 2009-11-12 16:26:19Z alexander $
  */
 
 /**
@@ -45,17 +45,13 @@
  */
 #require_once 'Zend/Tool/Framework/Registry.php';
 
-#require_once 'Zend/Tool/Framework/Provider/Initializable.php';
-
 /**
  * @category   Zend
  * @package    Zend_Tool
- * @copyright  Copyright (c) 2005-2010 Zend Technologies USA Inc. (http://www.zend.com)
+ * @copyright  Copyright (c) 2005-2009 Zend Technologies USA Inc. (http://www.zend.com)
  * @license    http://framework.zend.com/license/new-bsd     New BSD License
  */
-abstract class Zend_Tool_Project_Provider_Abstract
-    extends Zend_Tool_Framework_Provider_Abstract
-    implements Zend_Tool_Framework_Provider_Initializable
+abstract class Zend_Tool_Project_Provider_Abstract extends Zend_Tool_Framework_Provider_Abstract
 {
 
     const NO_PROFILE_THROW_EXCEPTION = true;
@@ -73,29 +69,20 @@ abstract class Zend_Tool_Project_Provider_Abstract
      */
     protected $_loadedProfile = null;
 
-    public function initialize()
+    /**
+     * constructor
+     *
+     * YOU SHOULD NOT OVERRIDE THIS, unless you know what you are doing
+     *
+     */
+    public function __construct()
     {
         // initialize the ZF Contexts (only once per php request)
         if (!self::$_isInitialized) {
-            
-            // load all base contexts ONCE
             $contextRegistry = Zend_Tool_Project_Context_Repository::getInstance();
             $contextRegistry->addContextsFromDirectory(
                 dirname(dirname(__FILE__)) . '/Context/Zf/', 'Zend_Tool_Project_Context_Zf_'
             );
-            $contextRegistry->addContextsFromDirectory(
-                dirname(dirname(__FILE__)) . '/Context/Filesystem/', 'Zend_Tool_Project_Context_Filesystem_'
-            );
-            
-            // determine if there are project specfic providers ONCE
-            $profilePath = $this->_findProfileDirectory();
-            if ($this->_hasProjectProviderDirectory($profilePath . DIRECTORY_SEPARATOR . '.zfproject.xml')) {
-                $profile = $this->_loadProfile();
-                // project providers directory resource
-                $ppd = $profile->search('ProjectProvidersDirectory');
-                $ppd->loadProviders($this->_registry);
-            }
-            
             self::$_isInitialized = true;
         }
 
@@ -125,25 +112,6 @@ abstract class Zend_Tool_Project_Provider_Abstract
      */
     protected function _loadProfile($loadProfileFlag = self::NO_PROFILE_THROW_EXCEPTION, $projectDirectory = null, $searchParentDirectories = true)
     {
-        $foundPath = $this->_findProfileDirectory($projectDirectory, $searchParentDirectories);
-
-        if ($foundPath == false) {
-            if ($loadProfileFlag == self::NO_PROFILE_THROW_EXCEPTION) {
-                throw new Zend_Tool_Project_Provider_Exception('A project profile was not found.');
-            } else {
-                return false;
-            }
-        }
-        
-        $profile = new Zend_Tool_Project_Profile();
-        $profile->setAttribute('projectDirectory', $foundPath);
-        $profile->loadFromFile();
-        $this->_loadedProfile = $profile;
-        return $profile;
-    }
-    
-    protected function _findProfileDirectory($projectDirectory = null, $searchParentDirectories = true)
-    {
         // use the cwd if no directory was provided
         if ($projectDirectory == null) {
             $projectDirectory = getcwd();
@@ -163,10 +131,13 @@ abstract class Zend_Tool_Project_Provider_Abstract
 
             $profile->setAttribute('projectDirectory', $projectDirectoryAssembled);
             if ($profile->isLoadableFromFile()) {
-                unset($profile);
-                return $projectDirectoryAssembled;
+                chdir($projectDirectoryAssembled);
+
+                $profile->loadFromFile();
+                $this->_loadedProfile = $profile;
+                break;
             }
-            
+
             // break after first run if we are not to check upper directories
             if ($searchParentDirectories == false) {
                 break;
@@ -174,10 +145,18 @@ abstract class Zend_Tool_Project_Provider_Abstract
 
             array_pop($parentDirectoriesArray);
         }
-        
-        return false;
+
+        if ($this->_loadedProfile == null) {
+            if ($loadProfileFlag == self::NO_PROFILE_THROW_EXCEPTION) {
+                throw new Zend_Tool_Project_Provider_Exception('A project profile was not found.');
+            } elseif ($loadProfileFlag == self::NO_PROFILE_RETURN_FALSE) {
+                return false;
+            }
+        }
+
+        return $profile;
     }
-    
+
     /**
      * Load the project profile from the current working directory, if not throw exception
      *
@@ -241,26 +220,6 @@ abstract class Zend_Tool_Project_Provider_Abstract
         return $engine->getContent($context, $methodName, $parameters);
     }
 
-    protected function _hasProjectProviderDirectory($pathToProfileFile)
-    {
-        // do some static analysis of the file so that we can determin whether or not to incure
-        // the cost of loading the profile before the system is fully bootstrapped
-        if (!file_exists($pathToProfileFile)) {
-            return false;
-        }
-        
-        $contents = file_get_contents($pathToProfileFile);
-        if (strstr($contents, '<projectProvidersDirectory') === false) {
-            return false;
-        }
-        
-        if (strstr($contents, '<projectProvidersDirectory enabled="false"')) {
-            return false;
-        }
-        
-        return true;
-    }
-    
     /**
      * _loadContextClassesIntoRegistry() - This is called by the constructor
      * so that child providers can provide a list of contexts to load into the

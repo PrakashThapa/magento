@@ -50,31 +50,15 @@ class Mage_SalesRule_Model_Validator extends Mage_Core_Model_Abstract
      * Defines if method Mage_SalesRule_Model_Validator::process() was already called
      * Used for clearing applied rule ids in Quote and in Address
      *
-     * @deprecated since 1.4.2.0
      * @var bool
      */
     protected $_isFirstTimeProcessRun = false;
 
-    /**
-     * Defines if method Mage_SalesRule_Model_Validator::reset() wasn't called
-     * Used for clearing applied rule ids in Quote and in Address
-     *
-     * @var bool
-     */
-    protected $_isFirstTimeResetRun = true;
-
-    /**
-     * Information about item totals for rules.
-     * @var array
-     */
-    protected $_rulesItemTotals = array();
-
-    /**
-     * Store information about addresses which cart fixed rule applied for
-     *
-     * @var array
-     */
-    protected $_cartFixedRuleUsedForAddress = array();
+    protected function _construct()
+    {
+        parent::_construct();
+        $this->_init('salesrule/validator');
+    }
 
     /**
      * Init validator
@@ -238,23 +222,6 @@ class Mage_SalesRule_Model_Validator extends Mage_Core_Model_Abstract
     }
 
     /**
-     * Reset quote and address applied rules
-     *
-     * @param Mage_Sales_Model_Quote_Address $address
-     * @return Mage_SalesRule_Model_Validator
-     */
-    public function reset(Mage_Sales_Model_Quote_Address $address)
-    {
-        if ($this->_isFirstTimeResetRun) {
-            $address->setAppliedRuleIds('');
-            $address->getQuote()->setAppliedRuleIds('');
-            $this->_isFirstTimeResetRun = false;
-        }
-
-        return $this;
-    }
-
-    /**
      * Quote item discount calculation process
      *
      * @param   Mage_Sales_Model_Quote_Item_Abstract $item
@@ -268,11 +235,19 @@ class Mage_SalesRule_Model_Validator extends Mage_Core_Model_Abstract
         $quote      = $item->getQuote();
         $address    = $this->_getAddress($item);
 
-        $itemPrice  = $this->_getItemPrice($item);
-        $baseItemPrice = $this->_getItemBasePrice($item);
+        //Clearing applied rule ids for quote and address
+        if ($this->_isFirstTimeProcessRun !== true){
+            $this->_isFirstTimeProcessRun = true;
+            $quote->setAppliedRuleIds('');
+            $address->setAppliedRuleIds('');
+        }
 
-        if ($itemPrice <= 0) {
-            return $this;
+        $itemPrice  = $item->getDiscountCalculationPrice();
+        if ($itemPrice !== null) {
+            $baseItemPrice = $item->getBaseDiscountCalculationPrice();
+        } else {
+            $itemPrice = $item->getCalculationPrice();
+            $baseItemPrice = $item->getBaseCalculationPrice();
         }
 
         $appliedRuleIds = array();
@@ -285,17 +260,17 @@ class Mage_SalesRule_Model_Validator extends Mage_Core_Model_Abstract
             if (!$rule->getActions()->validate($item)) {
                 continue;
             }
-
-            $qty = $this->_getItemQty($item, $rule);
+            $qty = $item->getTotalQty();
+            $qty = $rule->getDiscountQty() ? min($qty, $rule->getDiscountQty()) : $qty;
             $rulePercent = min(100, $rule->getDiscountAmount());
 
             $discountAmount = 0;
             $baseDiscountAmount = 0;
             switch ($rule->getSimpleAction()) {
-                case Mage_SalesRule_Model_Rule::TO_PERCENT_ACTION:
+                case 'to_percent':
                     $rulePercent = max(0, 100-$rule->getDiscountAmount());
                     //no break;
-                case Mage_SalesRule_Model_Rule::BY_PERCENT_ACTION:
+                case 'by_percent':
                     $step = $rule->getDiscountStep();
                     if ($step) {
                         $qty = floor($qty/$step)*$step;
@@ -308,13 +283,13 @@ class Mage_SalesRule_Model_Validator extends Mage_Core_Model_Abstract
                         $item->setDiscountPercent($discountPercent);
                     }
                     break;
-                case Mage_SalesRule_Model_Rule::TO_FIXED_ACTION:
+                case 'to_fixed':
                     $quoteAmount = $quote->getStore()->convertPrice($rule->getDiscountAmount());
                     $discountAmount    = $qty*($itemPrice-$quoteAmount);
                     $baseDiscountAmount= $qty*($baseItemPrice-$rule->getDiscountAmount());
                     break;
 
-                case Mage_SalesRule_Model_Rule::BY_FIXED_ACTION:
+                case 'by_fixed':
                     $step = $rule->getDiscountStep();
                     if ($step) {
                         $qty = floor($qty/$step)*$step;
@@ -324,67 +299,42 @@ class Mage_SalesRule_Model_Validator extends Mage_Core_Model_Abstract
                     $baseDiscountAmount = $qty*$rule->getDiscountAmount();
                     break;
 
-                case Mage_SalesRule_Model_Rule::CART_FIXED_ACTION:
-                    if (empty($this->_rulesItemTotals[$rule->getId()])) {
-                        Mage::throwException(Mage::helper('salesrule')->__('Item totals are not set for rule.'));
-                    }
-
-                    /**
-                     * prevent applying whole cart discount for every shipping order, but only for first order
-                     */
-                    if ($quote->getIsMultiShipping()) {
-                        $usedForAddressId = $this->getCartFixedRuleUsedForAddress($rule->getId());
-                        if ($usedForAddressId && $usedForAddressId != $address->getId()) {
-                            break;
-                        } else {
-                            $this->setCartFixedRuleUsedForAddress($rule->getId(), $address->getId());
-                        }
-                    }
+                case 'cart_fixed':
                     $cartRules = $address->getCartFixedRules();
                     if (!isset($cartRules[$rule->getId()])) {
                         $cartRules[$rule->getId()] = $rule->getDiscountAmount();
                     }
-
                     if ($cartRules[$rule->getId()] > 0) {
-                        if ($this->_rulesItemTotals[$rule->getId()]['items_count'] <= 1) {
-                            $quoteAmount = $quote->getStore()->convertPrice($cartRules[$rule->getId()]);
-                            $baseDiscountAmount = min($baseItemPrice * $qty, $cartRules[$rule->getId()]);
-                        } else {
-                            $discountRate = $baseItemPrice * $qty / $this->_rulesItemTotals[$rule->getId()]['base_items_price'];
-                            $maximumItemDiscount = $rule->getDiscountAmount() * $discountRate;
-                            $quoteAmount = $quote->getStore()->convertPrice($maximumItemDiscount);
-
-                            $baseDiscountAmount = min($baseItemPrice * $qty, $maximumItemDiscount);
-                            $this->_rulesItemTotals[$rule->getId()]['items_count']--;
-                        }
-
-                        $discountAmount = min($itemPrice * $qty, $quoteAmount);
-                        $discountAmount = $quote->getStore()->roundPrice($discountAmount);
-                        $baseDiscountAmount = $quote->getStore()->roundPrice($baseDiscountAmount);
+                        $quoteAmount        = $quote->getStore()->convertPrice($cartRules[$rule->getId()]);
+                        /**
+                         * We can't use row total here because row total not include tax
+                         */
+                        $discountAmount     = min($itemPrice*$qty - $item->getDiscountAmount(), $quoteAmount);
+                        $baseDiscountAmount = min($baseItemPrice*$qty - $item->getBaseDiscountAmount(), $cartRules[$rule->getId()]);
                         $cartRules[$rule->getId()] -= $baseDiscountAmount;
                     }
                     $address->setCartFixedRules($cartRules);
-
                     break;
 
-                case Mage_SalesRule_Model_Rule::BUY_X_GET_Y_ACTION:
+                case 'buy_x_get_y':
                     $x = $rule->getDiscountStep();
                     $y = $rule->getDiscountAmount();
                     if (!$x || $y>=$x) {
                         break;
                     }
-                    $buyAndDiscountQty = $x + $y;
-
-                    $fullRuleQtyPeriod = floor($qty / $buyAndDiscountQty);
-                    $freeQty  = $qty - $fullRuleQtyPeriod * $buyAndDiscountQty;
-
-                    $discountQty = $fullRuleQtyPeriod * $y;
-                    if ($freeQty > $x) {
-                         $discountQty += $freeQty - $x;
+                    $buy = 0; $free = 0;
+                    while ($buy+$free<$qty) {
+                        $buy += $x;
+                        if ($buy+$free>=$qty) {
+                            break;
+                        }
+                        $free += min($y, $qty-$buy-$free);
+                        if ($buy+$free>=$qty) {
+                            break;
+                        }
                     }
-
-                    $discountAmount    = $discountQty * $itemPrice;
-                    $baseDiscountAmount= $discountQty * $baseItemPrice;
+                    $discountAmount    = $free*$itemPrice;
+                    $baseDiscountAmount= $free*$baseItemPrice;
                     break;
             }
 
@@ -437,16 +387,13 @@ class Mage_SalesRule_Model_Validator extends Mage_Core_Model_Abstract
 
             $this->_maintainAddressCouponCode($address, $rule);
             $this->_addDiscountDescription($address, $rule);
-
             if ($rule->getStopRulesProcessing()) {
                 break;
             }
         }
-
         $item->setAppliedRuleIds(join(',',$appliedRuleIds));
         $address->setAppliedRuleIds($this->mergeIds($address->getAppliedRuleIds(), $appliedRuleIds));
         $quote->setAppliedRuleIds($this->mergeIds($quote->getAppliedRuleIds(), $appliedRuleIds));
-
         return $this;
     }
 
@@ -477,42 +424,36 @@ class Mage_SalesRule_Model_Validator extends Mage_Core_Model_Abstract
             $baseDiscountAmount = 0;
             $rulePercent = min(100, $rule->getDiscountAmount());
             switch ($rule->getSimpleAction()) {
-                case Mage_SalesRule_Model_Rule::TO_PERCENT_ACTION:
+                case 'to_percent':
                     $rulePercent = max(0, 100-$rule->getDiscountAmount());
-                case Mage_SalesRule_Model_Rule::BY_PERCENT_ACTION:
+                case 'by_percent':
                     $discountAmount    = ($shippingAmount - $address->getShippingDiscountAmount()) * $rulePercent/100;
                     $baseDiscountAmount= ($baseShippingAmount - $address->getBaseShippingDiscountAmount()) * $rulePercent/100;
                     $discountPercent = min(100, $address->getShippingDiscountPercent()+$rulePercent);
                     $address->setShippingDiscountPercent($discountPercent);
                     break;
-                case Mage_SalesRule_Model_Rule::TO_FIXED_ACTION:
+                case 'to_fixed':
                     $quoteAmount = $quote->getStore()->convertPrice($rule->getDiscountAmount());
                     $discountAmount    = $shippingAmount-$quoteAmount;
                     $baseDiscountAmount= $baseShippingAmount-$rule->getDiscountAmount();
                     break;
-                case Mage_SalesRule_Model_Rule::BY_FIXED_ACTION:
+                case 'by_fixed':
                     $quoteAmount        = $quote->getStore()->convertPrice($rule->getDiscountAmount());
                     $discountAmount     = $quoteAmount;
                     $baseDiscountAmount = $rule->getDiscountAmount();
                     break;
-                case Mage_SalesRule_Model_Rule::CART_FIXED_ACTION:
+
+                case 'cart_fixed':
                     $cartRules = $address->getCartFixedRules();
                     if (!isset($cartRules[$rule->getId()])) {
                         $cartRules[$rule->getId()] = $rule->getDiscountAmount();
                     }
                     if ($cartRules[$rule->getId()] > 0) {
                         $quoteAmount        = $quote->getStore()->convertPrice($cartRules[$rule->getId()]);
-                        $discountAmount     = min(
-                            $shippingAmount-$address->getShippingDiscountAmount(),
-                            $quoteAmount
-                        );
-                        $baseDiscountAmount = min(
-                            $baseShippingAmount-$address->getBaseShippingDiscountAmount(),
-                            $cartRules[$rule->getId()]
-                        );
+                        $discountAmount     = min($shippingAmount-$address->getShippingDiscountAmount(), $quoteAmount);
+                        $baseDiscountAmount = min($baseShippingAmount-$address->getBaseShippingDiscountAmount(), $cartRules[$rule->getId()]);
                         $cartRules[$rule->getId()] -= $baseDiscountAmount;
                     }
-
                     $address->setCartFixedRules($cartRules);
                     break;
             }
@@ -529,22 +470,12 @@ class Mage_SalesRule_Model_Validator extends Mage_Core_Model_Abstract
                 break;
             }
         }
-
         $address->setAppliedRuleIds($this->mergeIds($address->getAppliedRuleIds(), $appliedRuleIds));
         $quote->setAppliedRuleIds($this->mergeIds($quote->getAppliedRuleIds(), $appliedRuleIds));
-
         return $this;
     }
 
-    /**
-     * Merge two sets of ids
-     *
-     * @param array|string $a1
-     * @param array|string $a2
-     * @param bool $asString
-     * @return array
-     */
-    public function mergeIds($a1, $a2, $asString = true)
+    public function mergeIds($a1, $a2, $asString=true)
     {
         if (!is_array($a1)) {
             $a1 = empty($a1) ? array() : explode(',', $a1);
@@ -557,80 +488,6 @@ class Mage_SalesRule_Model_Validator extends Mage_Core_Model_Abstract
            $a = implode(',', $a);
         }
         return $a;
-    }
-
-    /**
-     * Set information about usage cart fixed rule by quote address
-     *
-     * @param int $ruleId
-     * @param int $itemId
-     * @return void
-     */
-    public function setCartFixedRuleUsedForAddress($ruleId, $itemId)
-    {
-        $this->_cartFixedRuleUsedForAddress[$ruleId] = $itemId;
-    }
-
-    /**
-     * Retrieve information about usage cart fixed rule by quote address
-     *
-     * @param int $ruleId
-     * @return int|null
-     */
-    public function getCartFixedRuleUsedForAddress($ruleId)
-    {
-        if (isset($this->_cartFixedRuleUsedForAddress[$ruleId])) {
-            return $this->_cartFixedRuleUsedForAddress[$ruleId];
-        }
-        return null;
-    }
-
-    /**
-     * Calculate quote totals for each rule and save results
-     *
-     * @param mixed $items
-     * @param Mage_Sales_Model_Quote_Address $address
-     * @return Mage_SalesRule_Model_Validator
-     */
-    public function initTotals($items, Mage_Sales_Model_Quote_Address $address)
-    {
-        $address->setCartFixedRules(array());
-
-        if (!$items) {
-            return $this;
-        }
-
-        foreach ($this->_getRules() as $rule) {
-            if (Mage_SalesRule_Model_Rule::CART_FIXED_ACTION == $rule->getSimpleAction()
-                && $this->_canProcessRule($rule, $address)) {
-
-                $ruleTotalItemsPrice = 0;
-                $ruleTotalBaseItemsPrice = 0;
-                $validItemsCount = 0;
-
-                foreach ($items as $item) {
-                    //Skipping child items to avoid double calculations
-                    if ($item->getParentItemId()) {
-                        continue;
-                    }
-                    if (!$rule->getActions()->validate($item)) {
-                        continue;
-                    }
-                    $qty = $this->_getItemQty($item, $rule);
-                    $ruleTotalItemsPrice += $this->_getItemPrice($item) * $qty;
-                    $ruleTotalBaseItemsPrice += $this->_getItemBasePrice($item) * $qty;
-                    $validItemsCount++;
-                }
-
-                $this->_rulesItemTotals[$rule->getId()] = array(
-                    'items_price' => $ruleTotalItemsPrice,
-                    'base_items_price' => $ruleTotalBaseItemsPrice,
-                    'items_count' => $validItemsCount,
-                );
-            }
-        }
-
-        return $this;
     }
 
     /**
@@ -674,43 +531,6 @@ class Mage_SalesRule_Model_Validator extends Mage_Core_Model_Abstract
     }
 
     /**
-     * Return item price
-     *
-     * @param Mage_Sales_Model_Quote_Item_Abstract $item
-     * @return float
-     */
-    protected function _getItemPrice($item)
-    {
-        $price = $item->getDiscountCalculationPrice();
-        return ($price !== null) ? $price : $item->getCalculationPrice();
-    }
-
-    /**
-     * Return item base price
-     *
-     * @param Mage_Sales_Model_Quote_Item_Abstract $item
-     * @return float
-     */
-    protected function _getItemBasePrice($item)
-    {
-        $price = $item->getDiscountCalculationPrice();
-        return ($price !== null) ? $item->getBaseDiscountCalculationPrice() : $item->getBaseCalculationPrice();
-    }
-
-    /**
-     * Return discount item qty
-     *
-     * @param Mage_Sales_Model_Quote_Item_Abstract $item
-     * @param Mage_SalesRule_Model_Rule $rule
-     * @return int
-     */
-    protected function _getItemQty($item, $rule)
-    {
-        $qty = $item->getTotalQty();
-        return $rule->getDiscountQty() ? min($qty, $rule->getDiscountQty()) : $qty;
-    }
-
-    /**
      * Convert address discount description array to string
      *
      * @param Mage_Sales_Model_Quote_Address $address
@@ -730,7 +550,4 @@ class Mage_SalesRule_Model_Validator extends Mage_Core_Model_Abstract
         $address->setDiscountDescription($description);
         return $this;
     }
-
-
-
 }

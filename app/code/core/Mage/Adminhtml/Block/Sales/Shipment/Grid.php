@@ -74,7 +74,7 @@ class Mage_Adminhtml_Block_Sales_Shipment_Grid extends Mage_Adminhtml_Block_Widg
         $this->addColumn('order_increment_id', array(
             'header'    => Mage::helper('sales')->__('Order #'),
             'index'     => 'order_increment_id',
-            'type'      => 'text',
+            'type'      => 'number',
         ));
 
         $this->addColumn('order_created_at', array(
@@ -113,7 +113,7 @@ class Mage_Adminhtml_Block_Sales_Shipment_Grid extends Mage_Adminhtml_Block_Widg
         ));
 
         $this->addExportType('*/*/exportCsv', Mage::helper('sales')->__('CSV'));
-        $this->addExportType('*/*/exportExcel', Mage::helper('sales')->__('Excel XML'));
+        $this->addExportType('*/*/exportExcel', Mage::helper('sales')->__('Excel'));
 
         return parent::_prepareColumns();
     }

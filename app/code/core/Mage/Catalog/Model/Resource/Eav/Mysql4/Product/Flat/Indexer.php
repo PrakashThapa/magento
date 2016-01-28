@@ -229,15 +229,7 @@ class Mage_Catalog_Model_Resource_Eav_Mysql4_Product_Flat_Indexer
                 $attribute = Mage::getSingleton('eav/config')
                     ->getAttribute($this->getEntityType(), $attributeCode)
                     ->setEntity($entity);
-                try {
-                    // check if exists source and backend model.
-                    // To prevent exception when some module was disabled
-                    $attribute->usesSource() && $attribute->getSource();
-                    $attribute->getBackend();
-                    $this->_attributes[$attributeCode] = $attribute;
-                } catch (Exception $e) {
-                    Mage::logException($e);
-                }
+                $this->_attributes[$attributeCode] = $attribute;
             }
         }
         return $this->_attributes;
@@ -462,23 +454,12 @@ class Mage_Catalog_Model_Resource_Eav_Mysql4_Product_Flat_Indexer
     protected function _sqlColunmDefinition($fieldName, $fieldProp)
     {
         $fieldNameQuote = $this->_getWriteAdapter()->quoteIdentifier($fieldName);
-
-        /**
-         * Process the case when 'is_null' prohibits null value, and 'default' proposed to be null
-         * It just means that default value not specified
-         */
-        if (false === $fieldProp['is_null'] && null === $fieldProp['default']) {
-            $defaultValue = '';
-        } else {
-            $defaultValue = $fieldProp['default'] === null ? ' DEFAULT NULL' : $this->_getReadAdapter()
-                ->quoteInto(' DEFAULT ?', $fieldProp['default']);
-        }
-
         return "{$fieldNameQuote} {$fieldProp['type']}"
             . ($fieldProp['unsigned'] ? ' UNSIGNED' : '')
             . ($fieldProp['extra'] ? ' ' . $fieldProp['extra'] : '')
             . ($fieldProp['is_null'] === false ? ' NOT NULL' : '')
-            . $defaultValue;
+            . ($fieldProp['default'] === null ? ' DEFAULT NULL' : $this->_getReadAdapter()
+                ->quoteInto(' DEFAULT ?', $fieldProp['default']));
     }
 
     /**

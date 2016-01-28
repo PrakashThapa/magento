@@ -107,13 +107,7 @@ class Mage_Cms_Model_Wysiwyg_Config extends Varien_Object
      */
     public function isEnabled()
     {
-        $storeId = $this->getStoreId();
-        if (!is_null($storeId)) {
-            $wysiwygState = Mage::getStoreConfig('cms/wysiwyg/enabled', $storeId);
-        } else {
-            $wysiwygState = Mage::getStoreConfig('cms/wysiwyg/enabled');
-        }
-        return in_array($wysiwygState, array(self::WYSIWYG_ENABLED, self::WYSIWYG_HIDDEN));
+        return in_array(Mage::getStoreConfig('cms/wysiwyg/enabled'), array(self::WYSIWYG_ENABLED, self::WYSIWYG_HIDDEN));
     }
 
     /**

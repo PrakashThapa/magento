@@ -28,7 +28,7 @@
 <config>
     <modules>
         <Mage_Sales>
-            <version>1.4.0.25</version>
+            <version>1.4.0.15</version>
         </Mage_Sales>
     </modules>
     <global>
@@ -155,7 +155,7 @@
                 <country_id><to_order_address>*</to_order_address><to_customer_address>*</to_customer_address></country_id>
                 <telephone><to_order_address>*</to_order_address><to_customer_address>*</to_customer_address></telephone>
                 <fax><to_order_address>*</to_order_address><to_customer_address>*</to_customer_address></fax>
-                <email><to_order_address>*</to_order_address><to_customer_address>*</to_customer_address></email>
+                <email><to_customer_address>*</to_customer_address></email>
             </sales_convert_quote_address>
 
             <sales_convert_quote_payment>
@@ -198,7 +198,7 @@
                 <tax_string><to_order_item>*</to_order_item></tax_string>
                 <row_weight><to_order_item>*</to_order_item></row_weight>
                 <row_total><to_order_item>*</to_order_item></row_total>
-                <base_original_price><to_order_item>*</to_order_item></base_original_price>
+                <price><to_order_item>base_original_price</to_order_item></price>
                 <base_tax_amount><to_order_item>*</to_order_item></base_tax_amount>
                 <base_row_total><to_order_item>*</to_order_item></base_row_total>
                 <discount_percent><to_order_item_discount>*</to_order_item_discount></discount_percent>
@@ -378,9 +378,6 @@
                     <order_address><table>sales_flat_order_address</table></order_address>
                     <order_payment><table>sales_flat_order_payment</table></order_payment>
                     <order_status_history><table>sales_flat_order_status_history</table></order_status_history>
-                    <order_status><table>sales_order_status</table></order_status>
-                    <order_status_state><table>sales_order_status_state</table></order_status_state>
-                    <order_status_label><table>sales_order_status_label</table></order_status_label>
 
                     <invoice><table>sales_flat_invoice</table></invoice>
                     <invoice_grid><table>sales_flat_invoice_grid</table></invoice_grid>
@@ -628,15 +625,10 @@
                         <cost/>
                         <is_recurring/><!-- for totals calculation, placing and processing order -->
                         <recurring_profile/><!-- for placing order -->
-                        <gift_message_available/>
                     </product_attributes>
                 </item>
             </quote>
             <order>
-                <!-- /**
-                      * @depraceted after 1.4.2, statuses are saved into sales_order_status table
-                      */
-                -->
                 <statuses>
                     <pending translate="label"><label>Pending</label></pending>
                     <pending_payment translate="label"><label>Pending Payment</label></pending_payment>

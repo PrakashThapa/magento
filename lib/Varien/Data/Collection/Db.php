@@ -86,13 +86,6 @@ class Varien_Data_Collection_Db extends Varien_Data_Collection
      */
     protected $_map = null;
 
-    /**
-     * Database's statement for fetch item one by one
-     *
-     * @var Zend_Db_Statement_Pdo
-     */
-    protected $_fetchStmt = null;
-
     public function __construct($conn=null)
     {
         parent::__construct();
@@ -299,7 +292,6 @@ class Varien_Data_Collection_Db extends Varien_Data_Collection
      */
     private function _setOrder($field, $direction, $unshift = false)
     {
-        $field = $this->_getMappedField($field);
         $direction = (strtoupper($direction) == self::SORT_ORDER_ASC) ? self::SORT_ORDER_ASC : self::SORT_ORDER_DESC;
         // emulate associative unshift
         if ($unshift) {
@@ -328,8 +320,6 @@ class Varien_Data_Collection_Db extends Varien_Data_Collection
             return $this;
         }
 
-        $this->_renderFiltersBefore();
-
         foreach ($this->_filters as $filter) {
             switch ($filter['type']) {
                 case 'or' :
@@ -339,13 +329,6 @@ class Varien_Data_Collection_Db extends Varien_Data_Collection
                 case 'string' :
                     $this->_select->where($filter['value']);
                     break;
-                case 'public':
-                    $field = $this->_getMappedField($filter['field']);
-                    $condition = $filter['value'];
-                    $this->_select->where(
-                        $this->_getConditionSql($field, $condition), null, Varien_Db_Select::TYPE_CONDITION
-                    );
-                    break;
                 default:
                     $condition = $this->_conn->quoteInto($filter['field'].'=?', $filter['value']);
                     $this->_select->where($condition);
@@ -353,13 +336,6 @@ class Varien_Data_Collection_Db extends Varien_Data_Collection
         }
         $this->_isFiltersRendered = true;
         return $this;
-    }
-
-    /**
-     * Hook for operations before rendering filters
-     */
-    protected function _renderFiltersBefore()
-    {
     }
 
     /**
@@ -373,7 +349,7 @@ class Varien_Data_Collection_Db extends Varien_Data_Collection
     public function addFieldToFilter($field, $condition=null)
     {
         $field = $this->_getMappedField($field);
-        $this->_select->where($this->_getConditionSql($field, $condition), null, Varien_Db_Select::TYPE_CONDITION);
+        $this->_select->where($this->_getConditionSql($field, $condition));
         return $this;
     }
 
@@ -421,22 +397,19 @@ class Varien_Data_Collection_Db extends Varien_Data_Collection
      * If non matched - sequential array is expected and OR conditions
      * will be built using above mentioned structure
      *
-     * @param string|array $fieldName
+     * @param string $fieldName
      * @param integer|string|array $condition
      * @return string
      */
     protected function _getConditionSql($fieldName, $condition) {
         if (is_array($fieldName)) {
-            $orSql = array();
-            foreach ($fieldName as $key=>$name) {
-                if (isset($condition[$key])) {
-                    $orSql[] = '('.$this->_getConditionSql($name, $condition[$key]).')';
-                } else {
-                    //if nothing passed as condition adding empty condition to avoid sql error
-                    $orSql[] = $this->getConnection()->quoteInto("$name = ?", '');
+            foreach ($fieldName as $f) {
+                $orSql = array();
+                foreach ($condition as $orCondition) {
+                    $orSql[] = '('.$this->_getConditionSql($f[0], $f[1]).')';
                 }
+                $sql = '('. join(' or ', $orSql) .')';
             }
-            $sql = '('. join(' or ', $orSql) .')';
             return $sql;
         }
 
@@ -631,55 +604,6 @@ class Varien_Data_Collection_Db extends Varien_Data_Collection
         $this->_setIsLoaded();
         $this->_afterLoad();
         return $this;
-    }
-
-    /**
-     * Returns a collection item that corresponds to the fetched row
-     * and moves the internal data pointer ahead
-     *
-     * return Varien_Object|bool
-     */
-    public function fetchItem()
-    {
-        if (null === $this->_fetchStmt) {
-            $this->_fetchStmt = $this->getConnection()
-                ->query($this->getSelect());
-        }
-        $data = $this->_fetchStmt->fetch();
-        if (!empty($data) && is_array($data)) {
-            $item = $this->getNewEmptyItem();
-            if ($this->getIdFieldName()) {
-                $item->setIdFieldName($this->getIdFieldName());
-            }
-            $item->setData($data);
-
-            return $item;
-        }
-        return false;
-    }
-
-    /**
-     * Convert items array to hash for select options
-     * unsing fetchItem method
-     *
-     * The difference between _toOptionHash() and this one is that this
-     * method fetch items one by one and does not load all collection items at once
-     * return items hash
-     * array($value => $label)
-     *
-     * @see     fetchItem()
-     *
-     * @param   string $valueField
-     * @param   string $labelField
-     * @return  array
-     */
-    protected function _toOptionHashOptimized($valueField='id', $labelField='name')
-    {
-        $result = array();
-        while ($item = $this->fetchItem()) {
-            $result[$item->getData($valueField)] = $item->getData($labelField);
-        }
-        return $result;
     }
 
     /**

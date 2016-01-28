@@ -272,8 +272,8 @@ class Mage_Paypal_Model_Info
      *
      * @param string $code
      * @return string
-     * @link https://cms.paypal.com/us/cgi-bin/?&cmd=_render-content&content_ID=developer/e_howto_html_IPNandPDTVariables
-     * @link https://cms.paypal.com/us/cgi-bin/?&cmd=_render-content&content_ID=developer/e_howto_api_nvp_r_GetTransactionDetails
+     * @see https://cms.paypal.com/us/cgi-bin/?&cmd=_render-content&content_ID=developer/e_howto_html_IPNandPDTVariables
+     * @see https://cms.paypal.com/us/cgi-bin/?&cmd=_render-content&content_ID=developer/e_howto_api_nvp_r_GetTransactionDetails
      */
     public static function explainPendingReason($code)
     {
@@ -311,8 +311,8 @@ class Mage_Paypal_Model_Info
      *
      * @param $code
      * @return string
-     * @link https://cms.paypal.com/us/cgi-bin/?&cmd=_render-content&content_ID=developer/e_howto_html_IPNandPDTVariables
-     * @link https://cms.paypal.com/us/cgi-bin/?&cmd=_render-content&content_ID=developer/e_howto_api_nvp_r_GetTransactionDetails
+     * @see https://cms.paypal.com/us/cgi-bin/?&cmd=_render-content&content_ID=developer/e_howto_html_IPNandPDTVariables
+     * @see https://cms.paypal.com/us/cgi-bin/?&cmd=_render-content&content_ID=developer/e_howto_api_nvp_r_GetTransactionDetails
      */
     public static function explainReasonCode($code)
     {
@@ -465,7 +465,7 @@ class Mage_Paypal_Model_Info
     /**
      * Attempt to convert AVS check result code into label
      *
-     * @link https://cms.paypal.com/us/cgi-bin/?&cmd=_render-content&content_ID=developer/e_howto_api_nvp_AVSResponseCodes
+     * @see https://cms.paypal.com/us/cgi-bin/?&cmd=_render-content&content_ID=developer/e_howto_api_nvp_AVSResponseCodes
      * @param string $value
      * @return string
      */
@@ -474,7 +474,6 @@ class Mage_Paypal_Model_Info
         switch ($value) {
             // Visa, MasterCard, Discover and American Express
             case 'A':
-            case 'YN':
                 return Mage::helper('paypal')->__('Matched Address only (no ZIP)');
             case 'B': // international "A"
                 return Mage::helper('paypal')->__('Matched Address only (no ZIP). International');
@@ -495,10 +494,8 @@ class Mage_Paypal_Model_Info
             case 'I':
                 return Mage::helper('paypal')->__('N/A. International Unavailable');
             case 'Z':
-            case 'NY':
                 return Mage::helper('paypal')->__('Matched five-digit ZIP only (no Address)');
             case 'P': // international "Z"
-            case 'NY':
                 return Mage::helper('paypal')->__('Matched Postal Code only (no Address)');
             case 'R':
                 return Mage::helper('paypal')->__('N/A. Retry');
@@ -529,7 +526,7 @@ class Mage_Paypal_Model_Info
     /**
      * Attempt to convert CVV2 check result code into label
      *
-     * @link https://cms.paypal.com/us/cgi-bin/?&cmd=_render-content&content_ID=developer/e_howto_api_nvp_AVSResponseCodes
+     * @see https://cms.paypal.com/us/cgi-bin/?&cmd=_render-content&content_ID=developer/e_howto_api_nvp_AVSResponseCodes
      * @param string $value
      * @return string
      */
@@ -568,7 +565,7 @@ class Mage_Paypal_Model_Info
     /**
      * Attempt to convert centinel VPAS result into label
      *
-     * @link https://cms.paypal.com/us/cgi-bin/?&cmd=_render-content&content_ID=developer/e_howto_api_nvp_r_DoDirectPayment
+     * @see https://cms.paypal.com/us/cgi-bin/?&cmd=_render-content&content_ID=developer/e_howto_api_nvp_r_DoDirectPayment
      * @param string $value
      * @return string
      */
@@ -602,7 +599,7 @@ class Mage_Paypal_Model_Info
     /**
      * Attempt to convert centinel ECI result into label
      *
-     * @link https://cms.paypal.com/us/cgi-bin/?&cmd=_render-content&content_ID=developer/e_howto_api_nvp_r_DoDirectPayment
+     * @see https://cms.paypal.com/us/cgi-bin/?&cmd=_render-content&content_ID=developer/e_howto_api_nvp_r_DoDirectPayment
      * @param string $value
      * @return string
      */

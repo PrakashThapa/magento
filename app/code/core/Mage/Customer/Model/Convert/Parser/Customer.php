@@ -57,12 +57,6 @@ class Mage_Customer_Model_Convert_Parser_Customer
 
     protected $_fields;
 
-    /**
-     * Array to contain customer groups
-     * @var null|array
-     */
-    protected $_customerGroups = null;
-
     public function getFields()
     {
         if (!$this->_fields) {
@@ -328,16 +322,10 @@ class Mage_Customer_Model_Convert_Parser_Customer
                 ? 1 : 0;
 
             if($customer->getGroupId()){
-                $groupCode = $this->_getCustomerGroupCode($customer);
-                if (is_null($groupCode)) {
-                    $this->addException(
-                        Mage::helper('catalog')->__("An invalid group ID is specified, skipping the record."),
-                        Mage_Dataflow_Model_Convert_Exception::ERROR
-                    );
-                    continue;
-                } else {
-                    $row['group'] = $groupCode;
-                }
+                $group = Mage::getResourceModel('customer/group_collection')
+                    ->addFilter('customer_group_id',$customer->getGroupId())
+                    ->load();
+                $row['group'] = $group->getFirstItem()->getCustomerGroupCode();
             }
 
             $batchExport = $this->getBatchExportModel()
@@ -392,12 +380,7 @@ class Mage_Customer_Model_Convert_Parser_Customer
             if (in_array($code, $internal) || $attr->getFrontendInput()=='hidden') {
                 continue;
             }
-
-            if ($code == 'street') {
-                $attributes['billing_'.$code.'_full'] = 'billing_'.$code;
-            } else {
-                $attributes['billing_'.$code] = 'billing_'.$code;
-            }
+            $attributes['billing_'.$code] = 'billing_'.$code;
         }
         $attributes['billing_country'] = 'billing_country';
 
@@ -406,40 +389,11 @@ class Mage_Customer_Model_Convert_Parser_Customer
             if (in_array($code, $internal) || $attr->getFrontendInput()=='hidden') {
                 continue;
             }
-
-            if ($code == 'street') {
-                $attributes['shipping_'.$code.'_full'] = 'shipping_'.$code;
-            } else {
-                $attributes['shipping_'.$code] = 'shipping_'.$code;
-            }
+            $attributes['shipping_'.$code] = 'shipping_'.$code;
         }
         $attributes['shipping_country'] = 'shipping_country';
 
         return $attributes;
-    }
-
-    /**
-     * Gets group code by customer's groupId
-     *
-     * @param Mage_Customer_Model_Customer $customer
-     * @return string|null
-     */
-    protected function _getCustomerGroupCode($customer)
-    {
-        if (is_null($this->_customerGroups)) {
-            $groups = Mage::getResourceModel('customer/group_collection')
-                    ->load();
-
-            foreach ($groups as $group) {
-                $this->_customerGroups[$group->getId()] = $group->getData('customer_group_code');
-            }
-        }
-
-        if (isset($this->_customerGroups[$customer->getGroupId()])) {
-            return $this->_customerGroups[$customer->getGroupId()];
-        } else {
-            return null;
-        }
     }
 
    /* ########### THE CODE BELOW IS NOT USED ############# */

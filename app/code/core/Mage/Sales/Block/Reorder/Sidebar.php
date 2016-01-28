@@ -63,7 +63,6 @@ class Mage_Sales_Block_Reorder_Sidebar extends Mage_Core_Block_Template
         $items = array();
         $order = $this->getLastOrder();
         $limit = 5;
-
         if ($order) {
             $website = Mage::app()->getStore()->getWebsiteId();
             foreach ($order->getParentItemsRandomCollection($limit) as $item) {
@@ -72,7 +71,6 @@ class Mage_Sales_Block_Reorder_Sidebar extends Mage_Core_Block_Template
                 }
             }
         }
-
         return $items;
     }
 

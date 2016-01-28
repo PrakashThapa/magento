@@ -15,9 +15,9 @@
  * @category   Zend
  * @package    Zend_Wildfire
  * @subpackage Plugin
- * @copyright  Copyright (c) 2005-2010 Zend Technologies USA Inc. (http://www.zend.com)
+ * @copyright  Copyright (c) 2005-2009 Zend Technologies USA Inc. (http://www.zend.com)
  * @license    http://framework.zend.com/license/new-bsd     New BSD License
- * @version    $Id: FirePhp.php 23066 2010-10-09 23:29:20Z cadorn $
+ * @version    $Id: FirePhp.php 16971 2009-07-22 18:05:45Z mikaelkael $
  */
 
 /** Zend_Controller_Request_Abstract */
@@ -41,7 +41,7 @@
  * @category   Zend
  * @package    Zend_Wildfire
  * @subpackage Plugin
- * @copyright  Copyright (c) 2005-2010 Zend Technologies USA Inc. (http://www.zend.com)
+ * @copyright  Copyright (c) 2005-2009 Zend Technologies USA Inc. (http://www.zend.com)
  * @license    http://framework.zend.com/license/new-bsd     New BSD License
  */
 class Zend_Wildfire_Plugin_FirePhp implements Zend_Wildfire_Plugin_Interface
@@ -475,8 +475,7 @@ class Zend_Wildfire_Plugin_FirePhp implements Zend_Wildfire_Plugin_Interface
             if (!isset($meta['File']) || !isset($meta['Line'])) {
 
                 if (!$trace) {
-                    $trace = $firephp->_getStackTrace(array_merge($options,
-                                                                  array('maxTraceDepth'=>$options['maxTraceDepth']+1)));
+                    $trace = $firephp->_getStackTrace($options);
                 }
 
                 $meta['File'] = isset($trace[0]['file'])?$trace[0]['file']:'';
@@ -514,22 +513,7 @@ class Zend_Wildfire_Plugin_FirePhp implements Zend_Wildfire_Plugin_Interface
     {
         $trace = debug_backtrace();
 
-        $trace = array_splice($trace, $options['traceOffset']);
-        
-        if (!count($trace)) {
-            return $trace;
-        }
-
-        if (isset($options['fixZendLogOffsetIfApplicable']) && $options['fixZendLogOffsetIfApplicable']) {
-            if (count($trace) >=3 &&
-                isset($trace[0]['file']) && substr($trace[0]['file'], -7, 7)=='Log.php' &&
-                isset($trace[1]['function']) && $trace[1]['function']=='__call') {
-
-                $trace = array_splice($trace, 2);
-            }
-        }
-
-        return array_splice($trace, 0, $options['maxTraceDepth']);
+        return array_splice($trace, $options['traceOffset'], $options['maxTraceDepth']);
     }
 
     /**

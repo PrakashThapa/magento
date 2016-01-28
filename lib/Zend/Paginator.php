@@ -14,9 +14,9 @@
  *
  * @category   Zend
  * @package    Zend_Paginator
- * @copyright  Copyright (c) 2005-2010 Zend Technologies USA Inc. (http://www.zend.com)
+ * @copyright  Copyright (c) 2005-2009 Zend Technologies USA Inc. (http://www.zend.com)
  * @license    http://framework.zend.com/license/new-bsd     New BSD License
- * @version    $Id: Paginator.php 22865 2010-08-21 12:28:09Z ramon $
+ * @version    $Id: Paginator.php 17631 2009-08-16 12:29:46Z norm2782 $
  */
 
 /**
@@ -32,7 +32,7 @@
 /**
  * @category   Zend
  * @package    Zend_Paginator
- * @copyright  Copyright (c) 2005-2010 Zend Technologies USA Inc. (http://www.zend.com)
+ * @copyright  Copyright (c) 2005-2009 Zend Technologies USA Inc. (http://www.zend.com)
  * @license    http://framework.zend.com/license/new-bsd     New BSD License
  */
 class Zend_Paginator implements Countable, IteratorAggregate
@@ -79,15 +79,6 @@ class Zend_Paginator implements Countable, IteratorAggregate
     protected static $_defaultItemCountPerPage = 10;
 
     /**
-     * Default number of local pages (i.e., the number of discretes
-     * page numbers that will be displayed, including the current
-     * page number)
-     *
-     * @var int
-     */
-    protected static $_defaultPageRange = 10;
-
-    /**
      * Scrolling style plugin loader
      *
      * @var Zend_Loader_PluginLoader
@@ -102,7 +93,7 @@ class Zend_Paginator implements Countable, IteratorAggregate
     protected static $_cache;
 
     /**
-     * Enable or disable the cache by Zend_Paginator instance
+     * Enable or desable the cache by Zend_Paginator instance
      *
      * @var bool
      */
@@ -163,7 +154,7 @@ class Zend_Paginator implements Countable, IteratorAggregate
      *
      * @var integer
      */
-    protected $_pageRange = null;
+    protected $_pageRange = 10;
 
     /**
      * Pages
@@ -385,26 +376,6 @@ class Zend_Paginator implements Countable, IteratorAggregate
     }
 
     /**
-     * Get the default page range
-     *
-     * @return int
-     */
-    public static function getDefaultPageRange()
-    {
-        return self::$_defaultPageRange;
-    }
-
-    /**
-     * Set the default page range
-     *
-     * @param int $count
-     */
-    public static function setDefaultPageRange($count)
-    {
-        self::$_defaultPageRange = (int) $count;
-    }
-
-    /**
      * Sets a cache object
      *
      * @param Zend_Cache_Core $cache
@@ -546,6 +517,7 @@ class Zend_Paginator implements Countable, IteratorAggregate
         }
 
         if (null === $pageNumber) {
+            $cleanTags = self::CACHE_TAG_PREFIX;
             foreach (self::$_cache->getIdsMatchingTags(array($this->_getCacheInternalId())) as $id) {
                 if (preg_match('|'.self::CACHE_TAG_PREFIX."(\d+)_.*|", $id, $page)) {
                     self::$_cache->remove($this->_getCacheId($page[1]));
@@ -674,10 +646,10 @@ class Zend_Paginator implements Countable, IteratorAggregate
      */
     public function getItem($itemNumber, $pageNumber = null)
     {
+        $itemNumber = $this->normalizeItemNumber($itemNumber);
+
         if ($pageNumber == null) {
             $pageNumber = $this->getCurrentPageNumber();
-        } else if ($pageNumber < 0) {
-            $pageNumber = ($this->count() + 1) + $pageNumber;
         }
 
         $page = $this->getItemsByPage($pageNumber);
@@ -691,12 +663,6 @@ class Zend_Paginator implements Countable, IteratorAggregate
 
             throw new Zend_Paginator_Exception('Page ' . $pageNumber . ' does not exist');
         }
-
-        if ($itemNumber < 0) {
-            $itemNumber = ($itemCount + 1) + $itemNumber;
-        }
-
-        $itemNumber = $this->normalizeItemNumber($itemNumber);
 
         if ($itemNumber > $itemCount) {
             /**
@@ -731,11 +697,11 @@ class Zend_Paginator implements Countable, IteratorAggregate
      * @param  integer $itemCountPerPage
      * @return Zend_Paginator $this
      */
-    public function setItemCountPerPage($itemCountPerPage = -1)
+    public function setItemCountPerPage($itemCountPerPage)
     {
         $this->_itemCountPerPage = (integer) $itemCountPerPage;
         if ($this->_itemCountPerPage < 1) {
-            $this->_itemCountPerPage = $this->getTotalItemCount();
+            $this->_itemCountPerPage = $this->getItemCountPerPage();
         }
         $this->_pageCount        = $this->_calculatePageCount();
         $this->_currentItems     = null;
@@ -817,10 +783,6 @@ class Zend_Paginator implements Countable, IteratorAggregate
      */
     public function getPageRange()
     {
-        if (null === $this->_pageRange) {
-            $this->_pageRange = self::getDefaultPageRange();
-        }
-
         return $this->_pageRange;
     }
 
@@ -936,8 +898,6 @@ class Zend_Paginator implements Countable, IteratorAggregate
      */
     public function normalizeItemNumber($itemNumber)
     {
-        $itemNumber = (integer) $itemNumber;
-
         if ($itemNumber < 1) {
             $itemNumber = 1;
         }
@@ -957,8 +917,6 @@ class Zend_Paginator implements Countable, IteratorAggregate
      */
     public function normalizePageNumber($pageNumber)
     {
-        $pageNumber = (integer) $pageNumber;
-
         if ($pageNumber < 1) {
             $pageNumber = 1;
         }
@@ -1044,10 +1002,7 @@ class Zend_Paginator implements Countable, IteratorAggregate
      */
     protected function _getCacheInternalId()
     {
-        return md5(serialize(array(
-            $this->getAdapter(),
-            $this->getItemCountPerPage()
-        )));
+        return md5(serialize($this->getAdapter()) . $this->getItemCountPerPage());
     }
 
     /**

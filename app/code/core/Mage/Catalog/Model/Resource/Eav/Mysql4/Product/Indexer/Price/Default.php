@@ -130,11 +130,9 @@ class Mage_Catalog_Model_Resource_Eav_Mysql4_Product_Indexer_Price_Default
      */
     public function reindexEntity($entityIds)
     {
-        $this->useDisableKeys(false); 
         $this->_prepareFinalPriceData($entityIds);
         $this->_applyCustomOption();
         $this->_movePriceDataToIndexTable();
-        $this->useDisableKeys(true);
 
         return $this;
     }

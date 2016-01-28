@@ -74,7 +74,6 @@ class Mage_Adminhtml_Catalog_CategoryController extends Mage_Adminhtml_Controlle
 
         Mage::register('category', $category);
         Mage::register('current_category', $category);
-        Mage::getSingleton('cms/wysiwyg_config')->setStoreId($this->getRequest()->getParam('store'));
         return $category;
     }
     /**
@@ -178,7 +177,7 @@ class Mage_Adminhtml_Catalog_CategoryController extends Mage_Adminhtml_Controlle
                 ->setLastEditedCategory($category->getId());
 //            $this->_initLayoutMessages('adminhtml/session');
             $this->loadLayout();
-            $this->getResponse()->setBody(Mage::helper('core')->jsonEncode(array(
+            $this->getResponse()->setBody(Zend_Json::encode(array(
                 'messages' => $this->getLayout()->getMessagesBlock()->getGroupedHtml(),
                 'content' =>
                     $this->getLayout()->getBlock('category.edit')->getFormHtml()
@@ -273,6 +272,14 @@ class Mage_Adminhtml_Catalog_CategoryController extends Mage_Adminhtml_Controlle
                 $parentCategory = Mage::getModel('catalog/category')->load($parentId);
                 $category->setPath($parentCategory->getPath());
             }
+            /**
+             * Check "Use Default Value" checkboxes values
+             */
+            if ($useDefaults = $this->getRequest()->getPost('use_default')) {
+                foreach ($useDefaults as $attributeCode) {
+                    $category->setData($attributeCode, false);
+                }
+            }
 
             /**
              * Process "Use Config Settings" checkboxes
@@ -306,39 +313,7 @@ class Mage_Adminhtml_Catalog_CategoryController extends Mage_Adminhtml_Controlle
                 'request' => $this->getRequest()
             ));
 
-            /**
-             * Proceed with $_POST['use_config']
-             * set into category model for proccessing through validation
-             */
-            $category->setData("use_post_data_config", $this->getRequest()->getPost('use_config'));
-
             try {
-                $validate = $category->validate();
-                if ($validate !== true) {
-                    foreach ($validate as $code => $error) {
-                        if ($error === true) {
-                            Mage::throwException(Mage::helper('catalog')->__('Attribute "%s" is required.', $category->getResource()->getAttribute($code)->getFrontend()->getLabel()));
-                        }
-                        else {
-                            Mage::throwException($error);
-                        }
-                    }
-                }
-
-                /**
-                 * Check "Use Default Value" checkboxes values
-                 */
-                if ($useDefaults = $this->getRequest()->getPost('use_default')) {
-                    foreach ($useDefaults as $attributeCode) {
-                        $category->setData($attributeCode, false);
-                    }
-                }
-
-                /**
-                 * Unset $_POST['use_config'] before save
-                 */
-                $category->unsetData('use_post_data_config');
-
                 $category->save();
                 Mage::getSingleton('adminhtml/session')->addSuccess(Mage::helper('catalog')->__('The category has been saved.'));
                 $refreshTree = 'true';

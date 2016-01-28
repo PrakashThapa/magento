@@ -128,7 +128,7 @@ class Mage_Sales_Model_Service_Order
             }
 
             $item = $this->_convertor->itemToShipmentItem($orderItem);
-            if ($orderItem->isDummy(true)) {
+            if ($orderItem->isDummy()) {
                 $qty = 1;
             } else {
                 if (isset($qtys[$orderItem->getId()])) {
@@ -201,37 +201,9 @@ class Mage_Sales_Model_Service_Order
         $qtys = isset($data['qtys']) ? $data['qtys'] : array();
         $creditmemo = $this->_convertor->toCreditmemo($this->_order);
         $creditmemo->setInvoice($invoice);
-
-        $invoiceQtysRefunded = array();
-        foreach($invoice->getOrder()->getCreditmemosCollection() as $createdCreditmemo) {
-            if ($createdCreditmemo->getState() != Mage_Sales_Model_Order_Creditmemo::STATE_CANCELED
-                && $createdCreditmemo->getInvoiceId() == $invoice->getId()) {
-                foreach($createdCreditmemo->getAllItems() as $createdCreditmemoItem) {
-                    $orderItemId = $createdCreditmemoItem->getOrderItem()->getId();
-                    if (isset($invoiceQtysRefunded[$orderItemId])) {
-                        $invoiceQtysRefunded[$orderItemId] += $createdCreditmemoItem->getQty();
-                    } else {
-                        $invoiceQtysRefunded[$orderItemId] = $createdCreditmemoItem->getQty();
-                    }
-                }
-            }
-        }
-
-        $invoiceQtysRefundLimits = array();
-        foreach($invoice->getAllItems() as $invoiceItem) {
-            $invoiceQtyCanBeRefunded = $invoiceItem->getQty();
-            $orderItemId = $invoiceItem->getOrderItem()->getId();
-            if (isset($invoiceQtysRefunded[$orderItemId])) {
-                $invoiceQtyCanBeRefunded = $invoiceQtyCanBeRefunded - $invoiceQtysRefunded[$orderItemId];
-            }
-            $invoiceQtysRefundLimits[$orderItemId] = $invoiceQtyCanBeRefunded; 
-        }
-
-
         foreach ($invoice->getAllItems() as $invoiceItem) {
             $orderItem = $invoiceItem->getOrderItem();
-
-            if (!$this->_canRefundItem($orderItem, $qtys, $invoiceQtysRefundLimits)) {
+            if (!$this->_canRefundItem($orderItem, $qtys)) {
                 continue;
             }
 
@@ -246,9 +218,6 @@ class Mage_Sales_Model_Service_Order
                 } else {
                     continue;
                 }
-                if (isset($invoiceQtysRefundLimits[$orderItem->getId()])) {
-                    $qty = min($qty, $invoiceQtysRefundLimits[$orderItem->getId()]);
-                }
             }
             $qty = min($qty, $invoiceItem->getQty());
             $totalQty += $qty;
@@ -260,16 +229,8 @@ class Mage_Sales_Model_Service_Order
         $this->_initCreditmemoData($creditmemo, $data);
         if (!isset($data['shipping_amount'])) {
             $order = $invoice->getOrder();
-            $isShippingInclTax = Mage::getSingleton('tax/config')->displaySalesShippingInclTax($order->getStoreId());
-            if ($isShippingInclTax) {
-                $baseAllowedAmount = $order->getBaseShippingInclTax()
-                        - $order->getBaseShippingRefunded()
-                        - $order->getBaseShippingTaxRefunded();
-            } else {
-                $baseAllowedAmount = $order->getBaseShippingAmount() - $order->getBaseShippingRefunded();
-                $baseAllowedAmount = min($baseAllowedAmount, $invoice->getBaseShippingAmount());
-            }
-            $creditmemo->setBaseShippingAmount($baseAllowedAmount);
+            $baseAllowedAmount = $order->getBaseShippingAmount()-$order->getBaseShippingRefunded();
+            $creditmemo->setBaseShippingAmount(min($baseAllowedAmount, $invoice->getBaseShippingAmount()));
         }
 
         $creditmemo->collectTotals();
@@ -388,16 +349,15 @@ class Mage_Sales_Model_Service_Order
      *
      * @param Mage_Sales_Model_Order_Item $item
      * @param array $qtys
-     * @param array $invoiceQtysRefundLimits
      * @return bool
      */
-    protected function _canRefundItem($item, $qtys=array(), $invoiceQtysRefundLimits=array())
+    protected function _canRefundItem($item, $qtys=array())
     {
         if ($item->isDummy()) {
             if ($item->getHasChildren()) {
                 foreach ($item->getChildrenItems() as $child) {
                     if (empty($qtys)) {
-                        if ($this->_canRefundNoDummyItem($child, $invoiceQtysRefundLimits)) {
+                        if ($child->getQtyToRefund()>0) {
                             return true;
                         }
                     } else {
@@ -410,34 +370,13 @@ class Mage_Sales_Model_Service_Order
             } else if($item->getParentItem()) {
                 $parent = $item->getParentItem();
                 if (empty($qtys)) {
-                    return $this->_canRefundNoDummyItem($parent, $invoiceQtysRefundLimits);
+                    return $parent->getQtyToRefund()>0;
                 } else {
                     return isset($qtys[$parent->getId()]) && $qtys[$parent->getId()] > 0;
                 }
             }
         } else {
-            return $this->_canRefundNoDummyItem($item, $invoiceQtysRefundLimits);
+            return $item->getQtyToRefund()>0;
         }
     }
-
-    /**
-     * Check if no dummy order item can be refunded
-     *
-     * @param Mage_Sales_Model_Order_Item $item
-     * @param array $invoiceQtysRefundLimits
-     * @return bool
-     */
-    protected function _canRefundNoDummyItem($item, $invoiceQtysRefundLimits=array())
-    {
-        if ($item->getQtyToRefund() < 0) {
-            return false;
-        }
-
-        if (isset($invoiceQtysRefundLimits[$item->getId()])) {
-            return $invoiceQtysRefundLimits[$item->getId()] > 0;
-        }
-
-        return true;
-    }
-
 }

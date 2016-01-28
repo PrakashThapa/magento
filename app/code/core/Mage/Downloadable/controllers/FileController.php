@@ -24,24 +24,58 @@
  * @license     http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
 
-require_once 'Mage/Downloadable/controllers/Adminhtml/Downloadable/FileController.php';
-
 /**
  * Downloadable File upload controller
  *
  * @category    Mage
  * @package     Mage_Downloadable
  * @author      Magento Core Team <core@magentocommerce.com>
- * @deprecated  after 1.4.2.0 Mage_Downloadable_Adminhtml_Downloadable_FileController is used
  */
-class Mage_Downloadable_FileController extends Mage_Downloadable_Adminhtml_Downloadable_FileController
+class Mage_Downloadable_FileController extends Mage_Adminhtml_Controller_Action
 {
+
     /**
-     * Controller predispatch method
-     * Show 404 front page
+     * Upload file controller action
      */
-    public function preDispatch()
+    public function uploadAction()
     {
-        $this->_forward('defaultIndex', 'cms_index');
+        $type = $this->getRequest()->getParam('type');
+        $tmpPath = '';
+        if ($type == 'samples') {
+            $tmpPath = Mage_Downloadable_Model_Sample::getBaseTmpPath();
+        } elseif ($type == 'links') {
+            $tmpPath = Mage_Downloadable_Model_Link::getBaseTmpPath();
+        } elseif ($type == 'link_samples') {
+            $tmpPath = Mage_Downloadable_Model_Link::getBaseSampleTmpPath();
+        }
+        $result = array();
+        try {
+            $uploader = new Varien_File_Uploader($type);
+            $uploader->setAllowRenameFiles(true);
+            $uploader->setFilesDispersion(true);
+            $result = $uploader->save($tmpPath);
+            $result['cookie'] = array(
+                'name'     => session_name(),
+                'value'    => $this->_getSession()->getSessionId(),
+                'lifetime' => $this->_getSession()->getCookieLifetime(),
+                'path'     => $this->_getSession()->getCookiePath(),
+                'domain'   => $this->_getSession()->getCookieDomain()
+            );
+        } catch (Exception $e) {
+            $result = array('error'=>$e->getMessage(), 'errorcode'=>$e->getCode());
+        }
+
+        $this->getResponse()->setBody(Mage::helper('core')->jsonEncode($result));
     }
+
+    /**
+     * Check admin permissions for this controller
+     *
+     * @return boolean
+     */
+    protected function _isAllowed()
+    {
+        return Mage::getSingleton('admin/session')->isAllowed('catalog/products');
+    }
+
 }

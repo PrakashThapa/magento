@@ -128,14 +128,13 @@ class Mage_Sales_Model_Billing_Agreement extends Mage_Payment_Model_Billing_Agre
     {
         $this->verifyToken();
 
-        $paymentMethodInstance = $this->getPaymentMethodInstance()
+        $this->getPaymentMethodInstance()
             ->placeBillingAgreement($this);
 
         $this->setCustomerId($this->getCustomer()->getId())
             ->setMethodCode($this->getMethodCode())
             ->setReferenceId($this->getBillingAgreementId())
             ->setStatus(self::STATUS_ACTIVE)
-            ->setAgreementLabel($paymentMethodInstance->getTitle())
             ->save();
         return $this;
     }
@@ -208,14 +207,13 @@ class Mage_Sales_Model_Billing_Agreement extends Mage_Payment_Model_Billing_Agre
 
         $this->_paymentMethodInstance = (isset($baData['method_code']))
             ? Mage::helper('payment')->getMethodInstance($baData['method_code'])
+                ->setStore($payment->getMethodInstance()->getStore())
             : $payment->getMethodInstance();
-        if ($this->_paymentMethodInstance) {
-            $this->_paymentMethodInstance->setStore($payment->getMethodInstance()->getStore());
-            $this->setCustomerId($payment->getOrder()->getCustomerId())
-                ->setMethodCode($this->_paymentMethodInstance->getCode())
-                ->setReferenceId($baData['billing_agreement_id'])
-                ->setStatus(self::STATUS_ACTIVE);
-        }
+
+        $this->setCustomerId($payment->getOrder()->getCustomerId())
+            ->setMethodCode($this->_paymentMethodInstance->getCode())
+            ->setReferenceId($baData['billing_agreement_id'])
+            ->setStatus(self::STATUS_ACTIVE);
         return $this;
     }
 

@@ -31,7 +31,6 @@
  */
 abstract class Mage_Payment_Model_Method_Abstract extends Varien_Object
 {
-    const ACTION_ORDER              = 'order';
     const ACTION_AUTHORIZE          = 'authorize';
     const ACTION_AUTHORIZE_CAPTURE  = 'authorize_capture';
 
@@ -51,7 +50,6 @@ abstract class Mage_Payment_Model_Method_Abstract extends Varien_Object
      * @var bool
      */
     protected $_isGateway                   = false;
-    protected $_canOrder                    = false;
     protected $_canAuthorize                = false;
     protected $_canCapture                  = false;
     protected $_canCapturePartial           = false;
@@ -83,16 +81,6 @@ abstract class Mage_Payment_Model_Method_Abstract extends Varien_Object
     public function __construct()
     {
 
-    }
-
-    /**
-     * Check order availability
-     *
-     * @return bool
-     */
-    public function canOrder()
-    {
-        return $this->_canOrder;
     }
 
     /**
@@ -148,7 +136,7 @@ abstract class Mage_Payment_Model_Method_Abstract extends Varien_Object
     /**
      * Check void availability
      *
-     * @param   Varien_Object $payment
+     * @param   Varien_Object $invoicePayment
      * @return  bool
      */
     public function canVoid(Varien_Object $payment)
@@ -381,24 +369,9 @@ abstract class Mage_Payment_Model_Method_Abstract extends Varien_Object
     }
 
     /**
-     * Order
-     *
-     * @param   Varien_Object $orderPayment
-     * @return  Mage_Payment_Model_Abstract
-     */
-    public function order(Varien_Object $payment, $amount)
-    {
-        if (!$this->canOrder()) {
-            Mage::throwException($this->_getHelper()->__('Order action is not available.'));
-        }
-        return $this;
-    }
-
-    /**
      * Authorize
      *
      * @param   Varien_Object $orderPayment
-     * @param float $amount
      * @return  Mage_Payment_Model_Abstract
      */
     public function authorize(Varien_Object $payment, $amount)
@@ -413,7 +386,6 @@ abstract class Mage_Payment_Model_Method_Abstract extends Varien_Object
      * Capture payment
      *
      * @param   Varien_Object $orderPayment
-     * @param float $amount
      * @return  Mage_Payment_Model_Abstract
      */
     public function capture(Varien_Object $payment, $amount)
@@ -456,7 +428,6 @@ abstract class Mage_Payment_Model_Method_Abstract extends Varien_Object
      * Refund money
      *
      * @param   Varien_Object $invoicePayment
-     * @param float $amount
      * @return  Mage_Payment_Model_Abstract
      */
     //public function refund(Varien_Object $payment, $amount)
